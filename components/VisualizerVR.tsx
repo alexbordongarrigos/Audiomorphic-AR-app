@@ -474,6 +474,29 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
         });
     }
 
+    // --- GLOBAL MULTIPLIERS ---
+    // Apply global multipliers to all modes, whether Auto Resonance is on or off
+    if (params.sgGlobalOpacity !== undefined) {
+        const modes: ('goldenSpiral' | 'flowerOfLife' | 'quantumWave' | 'torus')[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus'];
+        
+        // If currentSgSettings is the same reference as params.sgSettings, clone it to avoid mutating state directly
+        if (currentSgSettings === params.sgSettings) {
+            currentSgSettings = { ...params.sgSettings };
+        }
+        
+        modes.forEach(mode => {
+            const baseSettings = currentSgSettings[mode];
+            currentSgSettings[mode] = {
+                ...baseSettings,
+                lineOpacity: Math.max(0.0, Math.min(1.0, baseSettings.lineOpacity * (params.sgGlobalOpacity ?? 1.0))),
+                bgOpacity: Math.max(0.0, Math.min(1.0, baseSettings.bgOpacity * (params.sgGlobalOpacity ?? 1.0))),
+                flowSpeed: baseSettings.flowSpeed * (params.sgGlobalFlowSpeed ?? 1.0),
+                audioReactivity: baseSettings.audioReactivity * (params.sgGlobalAudioReactivity ?? 1.0),
+                viscosity: (baseSettings.viscosity ?? 0.5) * (params.sgGlobalViscosity ?? 1.0)
+            };
+        });
+    }
+
     let displayBaseHue = params.baseHue;
     if (params.harmonicColor || params.autoPilotMode !== 'drift') {
       let targetHue = params.baseHue;

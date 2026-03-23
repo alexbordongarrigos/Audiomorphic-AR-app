@@ -133,9 +133,17 @@ const App: React.FC = () => {
     if (isActive) {
       stopAudio();
     } else {
-      startAudio();
+      startAudio(params.audioSource);
     }
   };
+
+  // Restart audio if source changes while active
+  useEffect(() => {
+    if (isActive) {
+      stopAudio();
+      startAudio(params.audioSource);
+    }
+  }, [params.audioSource]);
 
   // --- AUTO PILOT ENGINE ---
   useEffect(() => {

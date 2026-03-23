@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings } from '../types';
-import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X } from 'lucide-react';
+import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings, DEFAULT_PARAMS } from '../types';
+import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload } from 'lucide-react';
 
 interface ControlPanelProps {
   params: VisualizerParams;
@@ -13,6 +13,8 @@ interface ControlPanelProps {
 const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioActive, toggleAudio, onClose }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
+  const [showPresetModal, setShowPresetModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleInstallClick = () => {
     window.open("https://drive.google.com/drive/folders/1bZ8yvbWr7r3eJUdKIQCSSuu-p398mAkn?usp=sharing", "_blank");
@@ -81,6 +83,123 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   };
 
   const centerSpiral = () => setParams(prev => ({ ...prev, z0_r: 0, z0_i: 0 }));
+
+  const [presetCategories, setPresetCategories] = useState({
+    baseGeometry: true,
+    colors: true,
+    sacredGeometry: true,
+    vrAr: true,
+    reactivity: true
+  });
+
+  const handleExportPreset = () => {
+    const exportData: Partial<VisualizerParams> = {};
+    if (presetCategories.baseGeometry) {
+      exportData.k = params.k; exportData.iter = params.iter; exportData.zoom = params.zoom;
+      exportData.distanceZoom = params.distanceZoom; exportData.psi = params.psi;
+      exportData.z0_r = params.z0_r; exportData.z0_i = params.z0_i; exportData.spiralThickness = params.spiralThickness;
+    }
+    if (presetCategories.colors) {
+      exportData.baseHue = params.baseHue; exportData.hueSpeed = params.hueSpeed;
+      exportData.hueRange = params.hueRange; exportData.saturation = params.saturation;
+      exportData.brightness = params.brightness; exportData.trail = params.trail;
+    }
+    if (presetCategories.sacredGeometry) {
+      exportData.sacredGeometryEnabled = params.sacredGeometryEnabled; exportData.sgTheme = params.sgTheme;
+      exportData.sgAutoHarmonic = params.sgAutoHarmonic; exportData.sgAutoResonance = params.sgAutoResonance;
+      exportData.sgGlobalOpacity = params.sgGlobalOpacity; exportData.sgGlobalFlowSpeed = params.sgGlobalFlowSpeed;
+      exportData.sgGlobalAudioReactivity = params.sgGlobalAudioReactivity; exportData.sgGlobalViscosity = params.sgGlobalViscosity;
+      exportData.sgSettings = params.sgSettings; exportData.spiralResonanceModes = params.spiralResonanceModes;
+    }
+    if (presetCategories.vrAr) {
+      exportData.vrMode = params.vrMode; exportData.vrDepth = params.vrDepth; exportData.vrRadius = params.vrRadius;
+      exportData.vrThickness = params.vrThickness; exportData.vrDistance = params.vrDistance;
+      exportData.arMode = params.arMode; exportData.arPortalMode = params.arPortalMode;
+      exportData.arPortalScale = params.arPortalScale; exportData.arPortalPerspectiveIntensity = params.arPortalPerspectiveIntensity;
+      exportData.arPortalVanishingRadius = params.arPortalVanishingRadius; exportData.arPortalFade = params.arPortalFade;
+      exportData.arPortalBending = params.arPortalBending;
+    }
+    if (presetCategories.reactivity) {
+      exportData.sensitivity = params.sensitivity; exportData.freqRange = params.freqRange;
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "audiomorphic_preset.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    setShowPresetModal(false);
+  };
+
+  const handleImportPreset = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string) as Partial<VisualizerParams>;
+        const importData: Partial<VisualizerParams> = {};
+        
+        if (presetCategories.baseGeometry) {
+          if (json.k !== undefined) importData.k = json.k;
+          if (json.iter !== undefined) importData.iter = json.iter;
+          if (json.zoom !== undefined) importData.zoom = json.zoom;
+          if (json.distanceZoom !== undefined) importData.distanceZoom = json.distanceZoom;
+          if (json.psi !== undefined) importData.psi = json.psi;
+          if (json.z0_r !== undefined) importData.z0_r = json.z0_r;
+          if (json.z0_i !== undefined) importData.z0_i = json.z0_i;
+          if (json.spiralThickness !== undefined) importData.spiralThickness = json.spiralThickness;
+        }
+        if (presetCategories.colors) {
+          if (json.baseHue !== undefined) importData.baseHue = json.baseHue;
+          if (json.hueSpeed !== undefined) importData.hueSpeed = json.hueSpeed;
+          if (json.hueRange !== undefined) importData.hueRange = json.hueRange;
+          if (json.saturation !== undefined) importData.saturation = json.saturation;
+          if (json.brightness !== undefined) importData.brightness = json.brightness;
+          if (json.trail !== undefined) importData.trail = json.trail;
+        }
+        if (presetCategories.sacredGeometry) {
+          if (json.sacredGeometryEnabled !== undefined) importData.sacredGeometryEnabled = json.sacredGeometryEnabled;
+          if (json.sgTheme !== undefined) importData.sgTheme = json.sgTheme;
+          if (json.sgAutoHarmonic !== undefined) importData.sgAutoHarmonic = json.sgAutoHarmonic;
+          if (json.sgAutoResonance !== undefined) importData.sgAutoResonance = json.sgAutoResonance;
+          if (json.sgGlobalOpacity !== undefined) importData.sgGlobalOpacity = json.sgGlobalOpacity;
+          if (json.sgGlobalFlowSpeed !== undefined) importData.sgGlobalFlowSpeed = json.sgGlobalFlowSpeed;
+          if (json.sgGlobalAudioReactivity !== undefined) importData.sgGlobalAudioReactivity = json.sgGlobalAudioReactivity;
+          if (json.sgGlobalViscosity !== undefined) importData.sgGlobalViscosity = json.sgGlobalViscosity;
+          if (json.sgSettings !== undefined) importData.sgSettings = json.sgSettings;
+          if (json.spiralResonanceModes !== undefined) importData.spiralResonanceModes = json.spiralResonanceModes;
+        }
+        if (presetCategories.vrAr) {
+          if (json.vrMode !== undefined) importData.vrMode = json.vrMode;
+          if (json.vrDepth !== undefined) importData.vrDepth = json.vrDepth;
+          if (json.vrRadius !== undefined) importData.vrRadius = json.vrRadius;
+          if (json.vrThickness !== undefined) importData.vrThickness = json.vrThickness;
+          if (json.vrDistance !== undefined) importData.vrDistance = json.vrDistance;
+          if (json.arMode !== undefined) importData.arMode = json.arMode;
+          if (json.arPortalMode !== undefined) importData.arPortalMode = json.arPortalMode;
+          if (json.arPortalScale !== undefined) importData.arPortalScale = json.arPortalScale;
+          if (json.arPortalPerspectiveIntensity !== undefined) importData.arPortalPerspectiveIntensity = json.arPortalPerspectiveIntensity;
+          if (json.arPortalVanishingRadius !== undefined) importData.arPortalVanishingRadius = json.arPortalVanishingRadius;
+          if (json.arPortalFade !== undefined) importData.arPortalFade = json.arPortalFade;
+          if (json.arPortalBending !== undefined) importData.arPortalBending = json.arPortalBending;
+        }
+        if (presetCategories.reactivity) {
+          if (json.sensitivity !== undefined) importData.sensitivity = json.sensitivity;
+          if (json.freqRange !== undefined) importData.freqRange = json.freqRange;
+        }
+
+        setParams(prev => ({ ...prev, ...importData }));
+        setShowPresetModal(false);
+      } catch (err) {
+        alert("Error al cargar el preset. Archivo inválido.");
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const renderControl = (
     label: string, 
@@ -203,22 +322,32 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       </svg>
       <style>{`
         .liquid-panel {
-          background: rgba(15, 15, 25, ${params.menuTransparency});
-          backdrop-filter: blur(40px) saturate(200%);
-          -webkit-backdrop-filter: blur(40px) saturate(200%);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: rgba(20, 25, 30, calc(${params.menuTransparency} * 0.4));
+          backdrop-filter: blur(50px) saturate(180%) contrast(110%);
+          -webkit-backdrop-filter: blur(50px) saturate(180%) contrast(110%);
+          border: 1px solid rgba(255, 255, 255, 0.2);
           box-shadow: 
-            0 30px 80px rgba(0, 0, 0, 0.6),
-            inset 0 1px 2px rgba(255, 255, 255, 0.4),
-            inset 0 -10px 30px rgba(255, 255, 255, 0.05),
-            inset 0 20px 40px rgba(255, 255, 255, 0.03);
-          border-radius: 24px;
+            0 40px 100px rgba(0, 0, 0, 0.6),
+            inset 0 2px 4px rgba(255, 255, 255, 0.5),
+            inset 0 -10px 40px rgba(255, 255, 255, 0.1),
+            inset 0 20px 60px rgba(255, 255, 255, 0.05);
+          border-radius: 32px;
           overflow: hidden;
+          position: relative;
         }
         @media (min-width: 768px) {
           .liquid-panel {
-            border-radius: 40px;
+            border-radius: 48px;
           }
+        }
+
+        .liquid-panel::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,0) 70%, rgba(255,255,255,0.1) 100%);
+          pointer-events: none;
+          z-index: -1;
         }
 
         .liquid-bubble {
@@ -432,10 +561,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         }
 
         .liquid-section {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 20px;
-          box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.03), 0 15px 35px rgba(0,0,0,0.3);
+          background: rgba(255, 255, 255, 0.06);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-top: 1px solid rgba(255, 255, 255, 0.3);
+          border-radius: 24px;
+          box-shadow: 
+            inset 0 0 30px rgba(255, 255, 255, 0.05), 
+            0 15px 35px rgba(0,0,0,0.2),
+            inset 0 2px 4px rgba(255,255,255,0.1);
           position: relative;
           overflow: hidden;
           padding: 0.75rem;
@@ -443,7 +578,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         }
         @media (min-width: 768px) {
           .liquid-section {
-            border-radius: 24px;
+            border-radius: 32px;
             padding: 1rem;
           }
         }
@@ -452,8 +587,34 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           content: '';
           position: absolute;
           top: -50%; left: -50%; width: 200%; height: 200%;
-          background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08), transparent 50%);
+          background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.15), transparent 50%);
           pointer-events: none;
+        }
+
+        .neon-metal-text {
+          background: linear-gradient(
+            270deg,
+            #ff007f,
+            #7f00ff,
+            #00ffff,
+            #00ff7f,
+            #ffff00,
+            #ff007f
+          );
+          background-size: 400% 400%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: morphing-colors 8s ease infinite;
+          text-shadow: 
+            0px 2px 2px rgba(255,255,255,0.5),
+            0px 4px 4px rgba(0,0,0,0.5),
+            0 0 10px rgba(255,255,255,0.2),
+            0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        @keyframes morphing-colors {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
 
         .liquid-scroll::-webkit-scrollbar {
@@ -476,36 +637,64 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
       <div className="liquid-panel w-full h-full flex-1 flex flex-col relative z-10">
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-white/10 flex flex-col md:flex-row justify-between items-center bg-white/5 gap-3 md:gap-0 shrink-0">
-          <div className="text-center md:text-left">
-            <h1 className="text-xl md:text-2xl font-bold neon-text flex items-center justify-center md:justify-start gap-2">
-              <Activity className="w-5 h-5 md:w-6 md:h-6 icon-neon" />
+          <div className="text-center md:text-left flex flex-col items-center md:items-start w-full md:w-auto">
+            <h1 className="text-2xl md:text-3xl font-bold neon-metal-text flex items-center justify-center md:justify-start gap-2 tracking-wider">
+              <Activity className="w-6 h-6 md:w-8 md:h-8 icon-neon" />
               AudioMorphic
             </h1>
-            <p className="text-[10px] md:text-xs text-cyan-100/70 mt-0.5 font-medium tracking-wide">Recurrencia Compleja Sonora</p>
+            <p className="text-[10px] md:text-xs text-cyan-100/70 mt-1 font-medium tracking-wide">Recurrencia Compleja Sonora</p>
           </div>
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap justify-center items-center gap-2 md:gap-3 w-full md:w-auto">
+            <button
+              onClick={() => setParams(DEFAULT_PARAMS)}
+              className="liquid-bubble p-2 md:p-3 text-red-400 hover:text-red-300"
+              title="Restaurar Valores por Defecto"
+            >
+              <RotateCcw size={20} className="icon-neon" />
+            </button>
+            <button
+              onClick={() => setShowPresetModal(true)}
+              className="liquid-bubble p-2 md:p-3 text-yellow-300 hover:text-yellow-200"
+              title="Guardar/Cargar Ajustes"
+            >
+              <Save size={20} className="icon-neon" />
+            </button>
+            <div className="flex bg-black/40 rounded-full p-1 border border-white/10">
+              <button
+                onClick={() => handleChange('audioSource', 'microphone')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${params.audioSource === 'microphone' ? 'bg-cyan-500/30 text-cyan-300' : 'text-gray-400'}`}
+              >
+                Mic
+              </button>
+              <button
+                onClick={() => handleChange('audioSource', 'system')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${params.audioSource === 'system' ? 'bg-cyan-500/30 text-cyan-300' : 'text-gray-400'}`}
+              >
+                Sistema
+              </button>
+            </div>
             <button
               onClick={toggleAudio}
               className={`liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 ${
                 audioActive ? 'text-red-300 shadow-[0_0_20px_rgba(239,68,68,0.4)]' : 'text-cyan-300'
               }`}
             >
-              <span className="hidden sm:inline">{audioActive ? 'Detener Micrófono' : 'Iniciar Micrófono'}</span>
+              <span className="hidden sm:inline">{audioActive ? 'Detener Audio' : 'Iniciar Audio'}</span>
               <span className="sm:hidden">{audioActive ? 'Detener' : 'Iniciar'}</span>
             </button>
             <button
               onClick={toggleFullScreen}
-              className="liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-purple-300"
+              className="liquid-bubble px-3 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-purple-300"
+              title="Pantalla Completa"
             >
               {isFullscreen ? <Minimize className="w-5 h-5 icon-neon" /> : <Maximize className="w-5 h-5 icon-neon" />}
-              <span className="hidden sm:inline">{isFullscreen ? 'Salir' : 'Pantalla Completa'}</span>
             </button>
             <button
               onClick={handleInstallClick}
-              className="liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-emerald-300"
+              className="liquid-bubble px-3 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-emerald-300"
+              title="Instalar"
             >
               <Download className="w-5 h-5 icon-neon" />
-              <span className="hidden sm:inline">Instalar</span>
             </button>
             
             {onClose && (
@@ -801,6 +990,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                    >
                      <div className="liquid-switch-thumb"></div>
                    </div>
+                </div>
+
+                <div className="mb-6 mt-6">
+                  <label className="text-xs uppercase tracking-wider text-emerald-400 flex items-center gap-2 mb-3 font-semibold">
+                    Ajustes Globales (Todas las Geometrías)
+                  </label>
+                  {renderControl("Transparencia Global", "sgGlobalOpacity", 0.0, 3.0, 0.01)}
+                  {renderControl("Velocidad de Flujo Global", "sgGlobalFlowSpeed", -3.0, 3.0, 0.01)}
+                  {renderControl("Reactividad de Audio Global", "sgGlobalAudioReactivity", 0.0, 5.0, 0.01)}
+                  {renderControl("Viscosidad Global", "sgGlobalViscosity", 0.0, 3.0, 0.01)}
                 </div>
 
                 {!params.sgAutoResonance ? (
@@ -1120,6 +1319,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               {renderControl("Detalle (Iteraciones)", "iter", 100, 2000, 10, undefined, false)}
               {renderControl("Profundidad (Zoom)", "zoom", 0.001, 3.0, 0.001, undefined, false)}
               {renderControl("Distancia (Zoom)", "distanceZoom", 0.1, 5.0, 0.01, undefined, false)}
+              {renderControl("Grosor de Línea Espiral", "spiralThickness", 0.1, 10, 0.1, undefined, false)}
             </div>
 
             {/* Transformation */}
@@ -1145,6 +1345,74 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           </div>
         </div>
       </div>
+
+      {/* Preset Modal */}
+      {showPresetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="liquid-panel w-full max-w-md p-6 border border-white/20 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold neon-text flex items-center gap-2">
+                <Save className="w-6 h-6 icon-neon" />
+                Presets y Ajustes
+              </h2>
+              <button onClick={() => setShowPresetModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-300 mb-6">
+              Selecciona qué categorías deseas guardar o cargar.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {[
+                { id: 'baseGeometry', label: 'Geometría Base' },
+                { id: 'colors', label: 'Cromatismo' },
+                { id: 'sacredGeometry', label: 'Geometría Sagrada' },
+                { id: 'vrAr', label: 'VR / AR' },
+                { id: 'reactivity', label: 'Reactividad' }
+              ].map(cat => (
+                <label key={cat.id} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={presetCategories[cat.id as keyof typeof presetCategories]}
+                    onChange={(e) => setPresetCategories(prev => ({ ...prev, [cat.id]: e.target.checked }))}
+                    className="rounded border-gray-500 bg-black/50 text-cyan-500 focus:ring-cyan-500/50"
+                  />
+                  {cat.label}
+                </label>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={handleExportPreset}
+                className="liquid-bubble w-full py-3 text-sm font-bold flex items-center justify-center gap-2 text-emerald-300 hover:text-emerald-200"
+              >
+                <Download className="w-5 h-5 icon-neon" />
+                Exportar Preset Actual
+              </button>
+
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".json"
+                  ref={fileInputRef}
+                  onChange={handleImportPreset}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="liquid-bubble w-full py-3 text-sm font-bold flex items-center justify-center gap-2 text-cyan-300 hover:text-cyan-200"
+                >
+                  <Upload className="w-5 h-5 icon-neon" />
+                  Importar Preset
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

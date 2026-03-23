@@ -64,6 +64,11 @@ export interface VisualizerParams {
   sgAutoResonance: boolean;
   sgTheme: 'light' | 'dark';
   sgAutoHarmonic: boolean;
+  sgGlobalOpacity: number;
+  sgGlobalFlowSpeed: number;
+  sgGlobalAudioReactivity: number;
+  sgGlobalViscosity: number;
+  spiralThickness: number;
   
   // VR/AR Params
   vrMode: boolean;
@@ -93,6 +98,7 @@ export interface VisualizerParams {
   showIndicators: boolean;
   menuTransparency: number;
   menuAutoCloseTime: number;
+  audioSource: 'microphone' | 'system';
   
   // Live Math Data (Read-only for UI)
   geometryData?: GeometryInfo;
@@ -153,6 +159,11 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   sgAutoResonance: true,
   sgTheme: 'light',
   sgAutoHarmonic: false,
+  sgGlobalOpacity: 1.0,
+  sgGlobalFlowSpeed: 1.0,
+  sgGlobalAudioReactivity: 1.0,
+  sgGlobalViscosity: 1.0,
+  spiralThickness: 1.0,
 
   vrMode: false,
   arMode: false,
@@ -177,7 +188,8 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   
   showIndicators: true,
   menuTransparency: 0.8,
-  menuAutoCloseTime: 5
+  menuAutoCloseTime: 5,
+  audioSource: 'microphone'
 };
 
 export interface AudioMetrics {

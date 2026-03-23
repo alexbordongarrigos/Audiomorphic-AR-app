@@ -323,6 +323,27 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
           });
       }
 
+      // --- GLOBAL MULTIPLIERS ---
+      if (p.sgGlobalOpacity !== undefined) {
+          const modes: ('goldenSpiral' | 'flowerOfLife' | 'quantumWave' | 'torus')[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus'];
+          
+          if (currentSgSettings === p.sgSettings) {
+              currentSgSettings = { ...p.sgSettings };
+          }
+          
+          modes.forEach(mode => {
+              const baseSettings = currentSgSettings[mode];
+              currentSgSettings[mode] = {
+                  ...baseSettings,
+                  lineOpacity: Math.max(0.0, Math.min(1.0, baseSettings.lineOpacity * (p.sgGlobalOpacity ?? 1.0))),
+                  bgOpacity: Math.max(0.0, Math.min(1.0, baseSettings.bgOpacity * (p.sgGlobalOpacity ?? 1.0))),
+                  flowSpeed: baseSettings.flowSpeed * (p.sgGlobalFlowSpeed ?? 1.0),
+                  audioReactivity: baseSettings.audioReactivity * (p.sgGlobalAudioReactivity ?? 1.0),
+                  viscosity: (baseSettings.viscosity ?? 0.5) * (p.sgGlobalViscosity ?? 1.0)
+              };
+          });
+      }
+
       // Clear with Trail
       if (p.sgTheme === 'dark') {
         ctx.fillStyle = `rgba(255, 255, 255, ${p.trail})`;
@@ -546,7 +567,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       gradient.addColorStop(1, col2);
       
       ctx.strokeStyle = gradient;
-      ctx.lineWidth = 1 + (sVol * 2);
+      ctx.lineWidth = (p.spiralThickness || 1.0) + (sVol * 2);
       ctx.lineJoin = 'round';
       
       if (p.brightness > 30) {

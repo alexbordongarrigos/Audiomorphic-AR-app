@@ -7,7 +7,7 @@ export const useAudioAnalyzer = () => {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
 
-  const startAudio = async () => {
+  const startAudio = async (sourceType: 'microphone' | 'system' = 'microphone') => {
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -18,7 +18,17 @@ export const useAudioAnalyzer = () => {
         await audioContextRef.current.resume();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream: MediaStream;
+      if (sourceType === 'system') {
+        stream = await navigator.mediaDevices.getDisplayMedia({ 
+          audio: true, 
+          video: true 
+        });
+        // Stop video tracks so we only capture audio
+        stream.getVideoTracks().forEach(track => track.stop());
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 2048; // Standard resolution
