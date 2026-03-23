@@ -13,6 +13,38 @@ const lerpAngle = (start: number, end: number, amt: number) => {
   return (start + delta * amt + 360) % 360;
 };
 
+const getGeometryColor = (
+  p: VisualizerParams,
+  settings: any,
+  baseHue: number,
+  sVol: number,
+  modeIndex: number,
+  activeModesCount: number
+) => {
+  let hue = baseHue;
+  let sat = p.saturation;
+  let light = p.sgTheme === 'dark' ? 20 : 80;
+  let lineOpacity = settings.lineOpacity;
+  let bgOpacity = settings.bgOpacity;
+  
+  if (p.sgAutoHarmonic) {
+    hue = (baseHue + modeIndex * (360 / activeModesCount) + sVol * 90) % 360;
+    sat = 70 + sVol * 30;
+    light = p.sgTheme === 'dark' ? 10 + sVol * 30 : 90 - sVol * 30;
+    lineOpacity = Math.min(1.0, settings.lineOpacity * (0.5 + sVol * 1.5));
+    bgOpacity = Math.min(1.0, settings.bgOpacity * (0.5 + sVol * 1.5));
+  } else {
+    if (settings.colored) {
+      hue = settings.customColor;
+    } else {
+      sat = 0;
+      light = p.sgTheme === 'dark' ? 0 : 100;
+    }
+  }
+  
+  return { hue, sat, light, lineOpacity, bgOpacity };
+};
+
 // --- SACRED GEOMETRY DRAWERS (Metaphysical & Quantum) ---
 
 const drawSeedOfLife = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, rotation: number, lineOpacity: number, bgOpacity: number, hue: number, sat: number, light: number, vol: number, thickness: number) => {
@@ -278,6 +310,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               const audioReactivity = 4.0 + sFreq * 2.0;
               
               currentSgSettings[mode] = {
+                  ...p.sgSettings[mode],
                   complexity,
                   connectionSpan: Math.floor(100 + slowOsc * 20),
                   scale: Math.max(0.05, scale),
@@ -291,7 +324,11 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       }
 
       // Clear with Trail
-      ctx.fillStyle = `rgba(0, 0, 0, ${p.trail})`;
+      if (p.sgTheme === 'dark') {
+        ctx.fillStyle = `rgba(255, 255, 255, ${p.trail})`;
+      } else {
+        ctx.fillStyle = `rgba(0, 0, 0, ${p.trail})`;
+      }
       ctx.fillRect(0, 0, width, height);
 
       // --- DYNAMIC CALCULATIONS ---
@@ -349,8 +386,9 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               const settings = currentSgSettings[mode];
               const numLayers = Math.max(1, Math.floor(settings.complexity));
               const baseRadius = Math.min(width, height) * 0.1 * settings.scale;
-              const flowSpeed = settings.flowSpeed * 0.5;
-              const timeOffset = timeRef.current * flowSpeed;
+              const effectiveFlowSpeed = settings.flowSpeed * 0.5 * (1 - settings.viscosity * 0.8);
+              const timeOffset = timeRef.current * effectiveFlowSpeed;
+              const effectiveReactivity = settings.audioReactivity * (1 - settings.viscosity * 0.5);
               
               const regime = p.geometryData?.regime || 'primary';
               const baseLightness = regime === 'reciprocal' ? p.brightness + 30 : p.brightness + 15;
@@ -361,16 +399,19 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   
                   // Exponential expansion for infinite feel
                   const scale = Math.pow(2, layerProgress * 4) * baseRadius;
-                  const radius = scale * (1.0 + sVol * settings.audioReactivity * 0.5);
+                  const radius = scale * (1.0 + sVol * effectiveReactivity * 0.5);
                   
                   // Color & Opacity
                   const hueOffset = layerProgress * p.hueRange;
                   const layerHue = (displayBaseHue + hueOffset) % 360;
-                  const layerLightness = Math.min(100, baseLightness + sVol * 40 * settings.audioReactivity);
+                  
+                  const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity, bgOpacity: baseBgOpacity } = getGeometryColor(
+                    p, settings, layerHue, sVol, modeIndex, activeModes.length
+                  );
                   
                   // Fade in at center, fade out at edges
                   let alphaMultiplier = Math.sin(layerProgress * Math.PI);
-                  alphaMultiplier *= (0.3 + 0.7 * sVol * settings.audioReactivity);
+                  alphaMultiplier *= (0.3 + 0.7 * sVol * effectiveReactivity);
                   alphaMultiplier = Math.min(1.0, Math.max(0.0, alphaMultiplier));
                   
                   // Rotation based on depth and time
@@ -379,19 +420,18 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   if (alphaMultiplier > 0.01) {
                       const modeRotation = rotation + (modeIndex * Math.PI / activeModes.length);
                       const modeRadius = radius * (1 - (modeIndex * 0.05));
-                      const modeHue = (layerHue + modeIndex * 30) % 360;
                       
-                      const lineOpacity = settings.lineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
-                      const bgOpacity = settings.bgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const lineOpacity = baseLineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const bgOpacity = baseBgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
                       
                       if (mode === 'flowerOfLife') {
-                          drawSeedOfLife(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHue, p.saturation, layerLightness, sVol * settings.audioReactivity, settings.thickness);
+                          drawSeedOfLife(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
                       } else if (mode === 'torus') {
-                          drawTorus(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHue, p.saturation, layerLightness, timeRef.current, sVol * settings.audioReactivity, settings.thickness);
+                          drawTorus(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
                       } else if (mode === 'quantumWave') {
-                          drawQuantumCloud(ctx, cx, cy, modeRadius, timeRef.current, sVol * settings.audioReactivity, lineOpacity, bgOpacity, modeHue, p.saturation, layerLightness, settings.thickness);
+                          drawQuantumCloud(ctx, cx, cy, modeRadius, timeRef.current, sVol * effectiveReactivity, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, settings.thickness);
                       } else if (mode === 'goldenSpiral') {
-                          drawGoldenSpiral(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHue, p.saturation, layerLightness, sVol * settings.audioReactivity, settings.thickness);
+                          drawGoldenSpiral(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
                       }
                   }
               }
@@ -486,8 +526,21 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       // If Reciprocal Regime (High Tension), add white/bright center
       const brightnessBoost = p.geometryData?.regime === 'reciprocal' ? 30 : 0;
 
-      const col1 = `hsl(${displayBaseHue}, ${p.saturation}%, ${Math.min(100, p.brightness + intensity + brightnessBoost)}%)`;
-      const col2 = `hsl(${secHue}, ${p.saturation}%, ${Math.max(0, p.brightness - 20 + intensity)}%)`;
+      let baseLightness = p.brightness;
+      if (p.sgAutoHarmonic) {
+         baseLightness = p.sgTheme === 'dark' ? 20 : 80;
+      }
+
+      const col1Lightness = p.sgTheme === 'dark' 
+        ? Math.max(0, baseLightness - intensity - brightnessBoost)
+        : Math.min(100, baseLightness + intensity + brightnessBoost);
+        
+      const col2Lightness = p.sgTheme === 'dark'
+        ? Math.min(100, baseLightness + 20 - intensity)
+        : Math.max(0, baseLightness - 20 + intensity);
+
+      const col1 = `hsl(${displayBaseHue}, ${p.saturation}%, ${col1Lightness}%)`;
+      const col2 = `hsl(${secHue}, ${p.saturation}%, ${col2Lightness}%)`;
       
       gradient.addColorStop(0, col1);
       gradient.addColorStop(1, col2);
@@ -538,8 +591,9 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   const step = spiralPoints.length / numNodes;
                   
                   // Flowing effect: nodes move continuously along the spiral
-                  const flowSpeed = settings.flowSpeed * 15; 
-                  const timeOffset = timeRef.current * flowSpeed; 
+                  const effectiveFlowSpeed = settings.flowSpeed * 15 * (1 - settings.viscosity * 0.8);
+                  const timeOffset = timeRef.current * effectiveFlowSpeed; 
+                  const effectiveReactivity = settings.audioReactivity * (1 - settings.viscosity * 0.5);
                   
                   for (let i = 0; i < numNodes; i++) {
                       const t1 = timeOffset + i * step;
@@ -547,36 +601,35 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                       
                       // Dynamic radius
                       let radius = Math.pow(pt1.mag, 0.5) * responsiveZoom * 0.05 * settings.scale;
-                      radius *= (1.0 + sVol * settings.audioReactivity);
+                      radius *= (1.0 + sVol * effectiveReactivity);
                       
                       // Color & Opacity
                       const hueOffset = (i / numNodes) * p.hueRange * 0.5;
                       const nodeHue = (displayBaseHue + hueOffset) % 360;
                       
-                      const regime = p.geometryData?.regime || 'primary';
-                      const baseLightness = regime === 'reciprocal' ? p.brightness + 30 : p.brightness + 15;
-                      const nodeLightness = Math.min(100, baseLightness + sVol * 40 * settings.audioReactivity);
+                      const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity, bgOpacity: baseBgOpacity } = getGeometryColor(
+                        p, settings, nodeHue, sVol, modeIndex, activeModes.length
+                      );
                       
-                      let alphaMultiplier = (0.15 + 0.85 * sVol * settings.audioReactivity);
+                      let alphaMultiplier = (0.15 + 0.85 * sVol * effectiveReactivity);
                       alphaMultiplier = Math.min(1.0, Math.max(0.02, alphaMultiplier));
                       
                       const rotation = pt1.angle + timeRef.current * 0.1;
 
                       const modeRotation = rotation + (modeIndex * Math.PI / activeModes.length);
                       const modeRadius = radius * (1 - (modeIndex * 0.05));
-                      const modeHueFinal = (nodeHue + modeIndex * 30) % 360;
                       
-                      const lineOpacity = settings.lineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
-                      const bgOpacity = settings.bgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const lineOpacity = baseLineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const bgOpacity = baseBgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
                       
                       if (mode === 'flowerOfLife') {
-                          drawSeedOfLife(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHueFinal, p.saturation, nodeLightness, sVol * settings.audioReactivity, settings.thickness);
+                          drawSeedOfLife(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
                       } else if (mode === 'torus') {
-                          drawTorus(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHueFinal, p.saturation, nodeLightness, timeRef.current, sVol * settings.audioReactivity, settings.thickness);
+                          drawTorus(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
                       } else if (mode === 'quantumWave') {
-                          drawQuantumCloud(ctx, pt1.x, pt1.y, modeRadius, timeRef.current, sVol * settings.audioReactivity, lineOpacity, bgOpacity, modeHueFinal, p.saturation, nodeLightness, settings.thickness);
+                          drawQuantumCloud(ctx, pt1.x, pt1.y, modeRadius, timeRef.current, sVol * effectiveReactivity, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, settings.thickness);
                       } else if (mode === 'goldenSpiral') {
-                          drawGoldenSpiral(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, modeHueFinal, p.saturation, nodeLightness, sVol * settings.audioReactivity, settings.thickness);
+                          drawGoldenSpiral(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
                       }
                   }
               });

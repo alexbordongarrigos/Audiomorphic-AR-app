@@ -751,6 +751,46 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
                 <div className="mb-4 flex justify-between items-center bg-emerald-900/20 p-3 rounded-2xl border border-emerald-500/30 gap-2">
                    <label className="text-[10px] sm:text-xs uppercase tracking-wider text-emerald-300 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)] truncate flex-1">
+                      Armonía Automática Total
+                   </label>
+                   <div 
+                     onClick={() => handleChange('sgAutoHarmonic', !params.sgAutoHarmonic)}
+                     className={`liquid-switch shrink-0 ${params.sgAutoHarmonic ? 'active-emerald' : ''}`}
+                   >
+                     <div className="liquid-switch-thumb"></div>
+                   </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
+                    Tema de Geometría
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                    <button
+                      onClick={() => handleChange('sgTheme', 'light')}
+                      className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
+                        params.sgTheme === 'light' 
+                          ? 'liquid-bubble text-emerald-300' 
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                      }`}
+                    >
+                      Tonos Claros
+                    </button>
+                    <button
+                      onClick={() => handleChange('sgTheme', 'dark')}
+                      className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
+                        params.sgTheme === 'dark' 
+                          ? 'liquid-bubble text-emerald-300' 
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                      }`}
+                    >
+                      Tonos Oscuros
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-4 flex justify-between items-center bg-emerald-900/20 p-3 rounded-2xl border border-emerald-500/30 gap-2">
+                   <label className="text-[10px] sm:text-xs uppercase tracking-wider text-emerald-300 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)] truncate flex-1">
                       Resonancia Automática
                    </label>
                    <div 
@@ -797,6 +837,84 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                     {renderSgControl("Grosor de Línea", "thickness", 0.01, 5.0, 0.01)}
                     {renderSgControl("Velocidad Flujo", "flowSpeed", -5.0, 5.0, 0.01)}
                     {renderSgControl("Reactividad Audio", "audioReactivity", 0.0, 10.0, 0.1)}
+                    {renderSgControl("Viscosidad", "viscosity", 0.01, 1.0, 0.01)}
+                    
+                    <div className="mb-3 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                       <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
+                          Con Color
+                       </label>
+                       <div 
+                         onClick={() => {
+                           setParams(prev => ({
+                             ...prev,
+                             sgSettings: {
+                               ...prev.sgSettings,
+                               [selectedSgEditMode]: {
+                                 ...prev.sgSettings[selectedSgEditMode],
+                                 colored: !prev.sgSettings[selectedSgEditMode].colored
+                               }
+                             }
+                           }));
+                         }}
+                         className={`liquid-switch shrink-0 ${params.sgSettings[selectedSgEditMode].colored ? 'active-emerald' : ''}`}
+                       >
+                         <div className="liquid-switch-thumb"></div>
+                       </div>
+                    </div>
+                    
+                    {params.sgSettings[selectedSgEditMode].colored && (
+                      <div className="mb-3 transition-all duration-500 opacity-100">
+                        <div className="flex justify-between items-center mb-1.5 gap-2">
+                          <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 flex items-center gap-1 sm:gap-2 font-semibold truncate flex-1">
+                            <span className="truncate">Tono Personalizado</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="1"
+                            value={params.sgSettings[selectedSgEditMode].customColor}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (isNaN(val)) return;
+                              setParams(prev => ({
+                                ...prev,
+                                sgSettings: {
+                                  ...prev.sgSettings,
+                                  [selectedSgEditMode]: {
+                                    ...prev.sgSettings[selectedSgEditMode],
+                                    customColor: val
+                                  }
+                                }
+                              }));
+                            }}
+                            className="bg-black/50 border border-white/10 rounded-lg px-2 py-1 text-xs text-white w-16 text-right focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="1"
+                          value={params.sgSettings[selectedSgEditMode].customColor}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setParams(prev => ({
+                              ...prev,
+                              sgSettings: {
+                                ...prev.sgSettings,
+                                [selectedSgEditMode]: {
+                                  ...prev.sgSettings[selectedSgEditMode],
+                                  customColor: val
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full liquid-slider"
+                          style={{
+                            background: `linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-6 p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-2xl text-center shadow-inner">

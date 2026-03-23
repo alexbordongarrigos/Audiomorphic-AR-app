@@ -20,6 +20,9 @@ export interface SacredGeometrySettings {
   thickness: number;
   flowSpeed: number;
   audioReactivity: number;
+  viscosity: number;
+  colored: boolean;
+  customColor: number;
 }
 
 export interface VisualizerParams {
@@ -59,6 +62,8 @@ export interface VisualizerParams {
   sgShowNodes: boolean;
   sgDrawMode: 'nodes' | 'layers';
   sgAutoResonance: boolean;
+  sgTheme: 'light' | 'dark';
+  sgAutoHarmonic: boolean;
   
   // VR/AR Params
   vrMode: boolean;
@@ -101,7 +106,10 @@ const defaultSGSettings: SacredGeometrySettings = {
   bgOpacity: 0.1,
   thickness: 0.1,
   flowSpeed: 0.2,
-  audioReactivity: 5.0
+  audioReactivity: 5.0,
+  viscosity: 0.5,
+  colored: true,
+  customColor: 200
 };
 
 export const DEFAULT_PARAMS: VisualizerParams = {
@@ -143,6 +151,8 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   sgShowNodes: true,
   sgDrawMode: 'layers',
   sgAutoResonance: true,
+  sgTheme: 'light',
+  sgAutoHarmonic: false,
 
   vrMode: false,
   arMode: false,
