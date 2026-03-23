@@ -30,8 +30,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           if ('wakeLock' in navigator) {
             wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
           }
-        } catch (err) {
-          console.error(`Wake Lock error: ${err}`);
+        } catch (err: any) {
+          if (err.name !== 'NotAllowedError') {
+            console.warn(`Wake Lock error: ${err.message}`);
+          }
         }
       } else {
         if (wakeLockRef.current) {

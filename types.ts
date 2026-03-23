@@ -170,7 +170,7 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   
   arPortalMode: false,
   arPortalScale: 1.0,
-  arPortalPerspectiveIntensity: 1.0,
+  arPortalPerspectiveIntensity: 2.0,
   arPortalVanishingRadius: 1.0,
   arPortalFade: 1.0,
   arPortalBending: 0.0,

@@ -175,6 +175,38 @@ const StereoCamera = ({ active }: { active: boolean }) => {
   return null;
 };
 
+const getGeometryColor = (
+  p: VisualizerParams,
+  settings: any,
+  baseHue: number,
+  sVol: number,
+  modeIndex: number,
+  activeModesCount: number
+) => {
+  let hue = baseHue;
+  let sat = p.saturation;
+  let light = p.sgTheme === 'dark' ? 20 : 80;
+  let lineOpacity = settings.lineOpacity;
+  let bgOpacity = settings.bgOpacity;
+  
+  if (p.sgAutoHarmonic) {
+    hue = (baseHue + modeIndex * (360 / activeModesCount) + sVol * 90) % 360;
+    sat = 70 + sVol * 30;
+    light = p.sgTheme === 'dark' ? 10 + sVol * 30 : 90 - sVol * 30;
+    lineOpacity = Math.min(1.0, settings.lineOpacity * (0.5 + sVol * 1.5));
+    bgOpacity = Math.min(1.0, settings.bgOpacity * (0.5 + sVol * 1.5));
+  } else {
+    if (settings.colored) {
+      hue = settings.customColor;
+    } else {
+      sat = 0;
+      light = p.sgTheme === 'dark' ? 0 : 100;
+    }
+  }
+  
+  return { hue, sat, light, lineOpacity, bgOpacity };
+};
+
 function addCircle3D(positions: Float32Array, colors: Float32Array, offset: number, cx: number, cy: number, cz: number, radius: number, rx: number, ry: number, rz: number, r: number, g: number, b: number, opacity: number) {
     const segments = 32;
     const cosX = Math.cos(rx), sinX = Math.sin(rx);
@@ -384,52 +416,6 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
     let currentZ0r = params.z0_r;
     let currentZ0i = params.z0_i;
 
-    if (params.autoPilot) {
-      const t = timeRef.current * params.autoSpeed * 0.05;
-      if (params.autoPilotMode === 'drift') {
-        currentK = 1.0 + Math.sin(t * 0.5) * 0.1;
-        currentPsi = t * 0.1;
-        currentZ0r = Math.sin(t * 0.3) * 0.5;
-        currentZ0i = Math.cos(t * 0.4) * 0.5;
-      } else if (params.autoPilotMode === 'harmonic') {
-        currentK = 1.0 + sVol * 0.2 + Math.sin(t) * 0.05;
-        currentPsi = params.psi + sFreq * 0.1 + t * 0.2;
-        currentZ0r = Math.sin(t * 0.5 + sFreq) * 0.3;
-        currentZ0i = Math.cos(t * 0.5 + sVol) * 0.3;
-      } else if (params.autoPilotMode === 'genesis') {
-        const phaseT = (t % 5) / 5;
-        const phase = Math.floor(t / 5) % 4;
-        if (phase === 0) { // Semilla
-          currentK = 1.0 + phaseT * 0.05;
-          currentPsi = phaseT * Math.PI * 0.5;
-          currentZ0r = 0;
-          currentZ0i = 0;
-        } else if (phase === 1) { // Expansión
-          currentK = 1.05 + phaseT * 0.2;
-          currentPsi = Math.PI * 0.5 + phaseT * Math.PI;
-          currentZ0r = 0;
-          currentZ0i = 0;
-        } else if (phase === 2) { // Complejidad
-          currentK = 1.25 + Math.sin(phaseT * Math.PI * 4) * 0.1;
-          currentPsi = Math.PI * 1.5 + phaseT * Math.PI * 2;
-          currentZ0r = 0;
-          currentZ0i = 0;
-        } else { // Trascendencia
-          currentK = 1.25 - phaseT * 0.25;
-          currentPsi = Math.PI * 3.5 + phaseT * Math.PI * 4;
-          currentZ0r = 0;
-          currentZ0i = 0;
-        }
-      }
-    }
-
-    if (params.arPortalMode) {
-      currentZ0r = 0;
-      currentZ0i = 0;
-      currentK = params.k;
-      currentPsi = params.psi;
-    }
-
     const kPulse = (currentK - 1) + (sVol * 0.005); 
     const dynamicK = 1.0 + kPulse;
     const dynamicPsi = currentPsi + (sFreq * 0.05);
@@ -553,8 +539,55 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
       let px_base = zReal * zoom;
       let py_base = zImag * zoom;
       
-      const dist = Math.sqrt(px_base*px_base + py_base*py_base);
-      const angle = Math.atan2(py_base, px_base);
+      let dist = Math.sqrt(px_base*px_base + py_base*py_base);
+      let angle = Math.atan2(py_base, px_base);
+      
+      let pz_offset = 0;
+
+      // Spiral resonance perturbation (applied to polar coordinates for better adaptation)
+      const activeModes = params.spiralResonanceModes || [];
+      if (activeModes.length > 0) {
+          let totalOffsetDist = 0;
+          let totalOffsetAngle = 0;
+          let totalOffsetZ = 0;
+          
+          activeModes.forEach(mode => {
+              const settings = currentSgSettings[mode];
+              const react = settings.audioReactivity;
+              const complexity = settings.complexity;
+              const scale = settings.scale * 10; // scale up for 3D
+              const t = timeRef.current * settings.flowSpeed;
+              
+              if (mode === 'goldenSpiral') {
+                  const offset = Math.sin(angle * 1.6180339 * complexity - t) * scale * sVol * react;
+                  totalOffsetDist += offset;
+                  totalOffsetZ += Math.cos(angle * 2) * offset;
+              } else if (mode === 'quantumWave') {
+                  const wave = Math.sin(n * 0.1 * complexity - t) * Math.cos(n * 0.05 + t);
+                  totalOffsetDist += wave * scale * 5 * sVol * react;
+                  totalOffsetAngle += wave * 0.05 * sVol * react;
+                  totalOffsetZ += Math.sin(n * 0.05) * scale * 5 * sVol * react;
+              } else if (mode === 'flowerOfLife') {
+                  const hex = Math.cos(angle * 6 * complexity + t) * scale * 3 * sVol * react;
+                  totalOffsetDist += hex;
+                  totalOffsetZ += Math.sin(angle * 3) * hex;
+              } else if (mode === 'torus') {
+                  const fold = Math.sin(dist * 0.1 * complexity - t * 2) * scale * 4 * sVol * react;
+                  totalOffsetDist += fold;
+                  totalOffsetZ += Math.cos(dist * 0.05) * fold;
+              }
+          });
+          
+          const damping = Math.sqrt(activeModes.length);
+          dist += totalOffsetDist / damping;
+          angle += totalOffsetAngle / damping;
+          pz_offset = totalOffsetZ / damping;
+          
+          if (dist < 0) {
+              dist = -dist;
+              angle += Math.PI;
+          }
+      }
       
       let px = px_base;
       let py = py_base;
@@ -573,10 +606,10 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
         
         px = Math.cos(angle) * portal_radius;
         py = Math.sin(angle) * portal_radius;
-        pz = pz_portal;
+        pz = pz_portal + pz_offset;
       } else {
         // Continuous spiral from -effectiveDepth/2 to +effectiveDepth/2
-        pz = (n / params.iter - 0.5) * effectiveDepth;
+        pz = (n / params.iter - 0.5) * effectiveDepth + pz_offset;
 
         // Make it a portal around the user by adding vrRadius
         // In symmetric mode, we use a logarithmic scale to flatten the exponential growth
@@ -585,50 +618,6 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
         
         px = Math.cos(angle) * radiusFactor;
         py = Math.sin(angle) * radiusFactor;
-      }
-
-      // Genesis perturbation
-      if (params.autoPilotMode === 'genesis' && !params.arPortalMode) {
-          const modes = params.spiralResonanceModes || ['flowerOfLife'];
-          const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
-          
-          let totalOffsetX = 0;
-          let totalOffsetY = 0;
-          let totalOffsetZ = 0;
-          
-          activeModes.forEach(mode => {
-              const settings = currentSgSettings[mode];
-              const react = settings.audioReactivity;
-              const complexity = settings.complexity;
-              const scale = settings.scale * 10; // scale up for 3D
-              const t = timeRef.current * settings.flowSpeed;
-              
-              if (mode === 'goldenSpiral') {
-                  const offset = Math.sin(angle * 1.6180339 * complexity - t) * scale * sVol * react;
-                  totalOffsetX += Math.cos(angle) * offset;
-                  totalOffsetY += Math.sin(angle) * offset;
-                  totalOffsetZ += Math.cos(angle * 2) * offset;
-              } else if (mode === 'quantumWave') {
-                  const wave = Math.sin(n * 0.1 * complexity - t) * Math.cos(n * 0.05 + t);
-                  totalOffsetX += wave * scale * 5 * sVol * react;
-                  totalOffsetY -= wave * scale * 5 * sVol * react;
-                  totalOffsetZ += Math.sin(n * 0.05) * scale * 5 * sVol * react;
-              } else if (mode === 'flowerOfLife') {
-                  const hex = Math.cos(angle * 6 * complexity + t) * scale * 3 * sVol * react;
-                  totalOffsetX += Math.cos(angle) * hex;
-                  totalOffsetY += Math.sin(angle) * hex;
-                  totalOffsetZ += Math.sin(angle * 3) * hex;
-              } else if (mode === 'torus') {
-                  const fold = Math.sin(dist * 0.1 * complexity - t * 2) * scale * 4 * sVol * react;
-                  totalOffsetX += Math.cos(angle) * fold;
-                  totalOffsetY += Math.sin(angle) * fold;
-                  totalOffsetZ += Math.cos(dist * 0.05) * fold;
-              }
-          });
-          
-          px += totalOffsetX / Math.sqrt(activeModes.length);
-          py += totalOffsetY / Math.sqrt(activeModes.length);
-          pz += totalOffsetZ / Math.sqrt(activeModes.length);
       }
 
       positions[n * 3] = px;
@@ -683,19 +672,20 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
     const sgPositions = sgPositionsRef.current;
     const sgColors = sgColorsRef.current;
 
-    if (params.sacredGeometryEnabled && params.geometryData && !params.arPortalMode) {
+    if (params.sacredGeometryEnabled) {
         const modes = params.sacredGeometryModes || ['flowerOfLife'];
         const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
-        const regime = params.geometryData.regime;
+        const regime = params.geometryData?.regime || 'primary';
         const baseLightness = regime === 'reciprocal' ? params.brightness + 30 : params.brightness + 15;
 
-        if (params.sgDrawMode === 'layers') {
+        if (params.sgDrawMode === 'layers' || params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
                 const settings = currentSgSettings[mode];
-                const numLayers = Math.max(3, Math.floor(settings.complexity * 5)); // More layers for VR tunnel
-                const baseRadius = 10 * settings.scale; // Larger base radius
-                const flowSpeed = settings.flowSpeed * 0.2;
-                const tunnelDepth = params.vrDepth * 20; // Deep tunnel
+                // In AR portal mode, use many more layers to create a dense, continuous tunnel
+                const numLayers = params.arPortalMode ? Math.max(15, Math.floor(settings.complexity * 12)) : Math.max(3, Math.floor(settings.complexity * 5)); 
+                const baseRadius = 10 * settings.scale; 
+                const flowSpeed = settings.flowSpeed * (params.arPortalMode ? 0.05 : 0.2); // Slower, more hypnotic flow in AR
+                const tunnelDepth = params.vrDepth * 20; 
                 
                 for (let i = 0; i < numLayers; i++) {
                     const layerProgress = i / numLayers;
@@ -703,27 +693,51 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
                     const zFraction = (layerProgress + timeRef.current * flowSpeed) % 1.0;
                     
                     // Z position: from slightly behind camera to deep in the distance
-                    const cz = (0.1 - zFraction) * tunnelDepth;
+                    let cz = (0.1 - zFraction) * tunnelDepth;
+                    let radius = baseRadius * (1 + sVol * settings.audioReactivity * 0.5);
                     
-                    // Radius pulses with audio
-                    const radius = baseRadius * (1 + sVol * settings.audioReactivity * 0.5);
-                    
-                    // Rotations
-                    const rz = zFraction * Math.PI * 2 + timeRef.current * 0.5 * (modeIndex % 2 === 0 ? 1 : -1) + (modeIndex * Math.PI / activeModes.length);
-                    const rx = Math.sin(timeRef.current * 0.3 + i) * 0.5 * sVol * settings.audioReactivity;
-                    const ry = Math.cos(timeRef.current * 0.4 + i) * 0.5 * sVol * settings.audioReactivity;
-                    
+                    let rz = zFraction * Math.PI * 2 + timeRef.current * 0.5 * (modeIndex % 2 === 0 ? 1 : -1) + (modeIndex * Math.PI / activeModes.length);
+                    let rx = Math.sin(timeRef.current * 0.3 + i) * 0.5 * sVol * settings.audioReactivity;
+                    let ry = Math.cos(timeRef.current * 0.4 + i) * 0.5 * sVol * settings.audioReactivity;
+                    let distanceFade = Math.sin(zFraction * Math.PI); 
+
+                    if (params.arPortalMode) {
+                        cz = (zFraction - 1.0) * effectiveDepth;
+                        const vRad = params.arPortalVanishingRadius ?? 0.5;
+                        const hollowRadius = screenDiag * vRad;
+                        const growthSpace = screenDiag - hollowRadius;
+                        
+                        // To match the spiral exactly, we use the same logarithmic mapping
+                        const portal_radius = hollowRadius + zFraction * growthSpace;
+                        radius = portal_radius * (1 + sVol * settings.audioReactivity * 0.5);
+                        
+                        // Match spiral rotation exactly: angle = n * psi
+                        // As zFraction changes (layer flows forward), it rotates along the spiral path
+                        const spiralAngle = zFraction * params.iter * dynamicPsi;
+                        rz = spiralAngle + (modeIndex * Math.PI / activeModes.length);
+                        
+                        // Keep layers flat to the camera to form a perfect tunnel
+                        rx = 0;
+                        ry = 0;
+                        
+                        // Cumulative fading: highly opaque near the deep end to combine with spiral,
+                        // fading out smoothly as it approaches the camera (zFraction -> 1),
+                        // and a tiny fade at the absolute deep end (zFraction -> 0) to avoid a hard cutoff wall.
+                        distanceFade = Math.pow(1.0 - zFraction, 1.2) * Math.min(1.0, zFraction * 15.0) * (0.8 + 0.2 * sVol);
+                    }
+
                     // Color and Opacity
                     const hueOffset = zFraction * params.hueRange;
                     const layerHue = (displayBaseHue + hueOffset + modeIndex * 30) % 360;
-                    const layerLightness = Math.min(100, baseLightness + sVol * 50 * settings.audioReactivity);
                     
-                    // Fade out in distance and very close to camera
-                    const distanceFade = Math.sin(zFraction * Math.PI); 
-                    const opacity = Math.min(1.0, settings.lineOpacity * distanceFade * (0.5 + 1.5 * sVol * settings.audioReactivity) * 2.0);
+                    const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity } = getGeometryColor(
+                      params, settings, layerHue, sVol, modeIndex, activeModes.length
+                    );
+                    
+                    const opacity = Math.min(1.0, baseLineOpacity * distanceFade * (0.5 + 1.5 * sVol * settings.audioReactivity) * (params.arPortalMode ? 2.5 : 2.0));
                     
                     if (opacity > 0.01 && sgOffset < maxSgPoints - 2000) {
-                        const color = new THREE.Color().setHSL(layerHue / 360, params.saturation / 100, layerLightness / 100);
+                        const color = new THREE.Color().setHSL(finalHue / 360, finalSat / 100, finalLight / 100);
                         
                         if (mode === 'flowerOfLife') {
                             sgOffset = addFlowerOfLife3D(sgPositions, sgColors, sgOffset, 0, 0, cz, radius, rx, ry, rz, color.r, color.g, color.b, opacity);
@@ -737,7 +751,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
                     }
                 }
             });
-        } else if (params.sgDrawMode === 'nodes' && params.sgShowNodes) {
+        } else if (params.sgDrawMode === 'nodes' && params.sgShowNodes && !params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
                 const settings = currentSgSettings[mode];
                 const numNodes = Math.max(2, Math.floor(settings.complexity * 2));
@@ -762,16 +776,19 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
                         
                         const hueOffset = (i / numNodes) * params.hueRange;
                         const nodeHue = (displayBaseHue + hueOffset + modeIndex * 45) % 360;
-                        const nodeLightness = Math.min(100, baseLightness + sVol * 50 * settings.audioReactivity);
                         
-                        const opacity = Math.min(1.0, settings.lineOpacity * (0.4 + 1.6 * sVol * settings.audioReactivity) * 2.0);
+                        const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity } = getGeometryColor(
+                          params, settings, nodeHue, sVol, modeIndex, activeModes.length
+                        );
+                        
+                        const opacity = Math.min(1.0, baseLineOpacity * (0.4 + 1.6 * sVol * settings.audioReactivity) * 2.0);
                         
                         // 3D Rotation spinning wildly but harmonically
                         const rx = timeRef.current * 1.1 + i * 0.1;
                         const ry = timeRef.current * 1.3 + i * 0.2;
                         const rz = timeRef.current * 0.7 + i * 0.3 + (modeIndex * Math.PI / activeModes.length);
                         
-                        const color = new THREE.Color().setHSL(nodeHue / 360, params.saturation / 100, nodeLightness / 100);
+                        const color = new THREE.Color().setHSL(finalHue / 360, finalSat / 100, finalLight / 100);
                         
                         if (mode === 'flowerOfLife') {
                             sgOffset = addFlowerOfLife3D(sgPositions, sgColors, sgOffset, ptX, ptY, ptZ, radius, rx, ry, rz, color.r, color.g, color.b, opacity);
@@ -797,7 +814,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
 
   return (
     <group>
-      {params.autoPilotMode === 'genesis' && params.sgDrawMode === 'nodes' ? (
+      {(params.spiralResonanceModes && params.spiralResonanceModes.length > 0) && params.sgDrawMode === 'nodes' && !params.arPortalMode ? (
         <points>
           <bufferGeometry ref={geometryRef}>
             <bufferAttribute
@@ -946,7 +963,7 @@ const DynamicCamera = ({
     const aspect = Math.max(size.width / Math.max(size.height, 1), 0.1);
     const H = W / aspect;
 
-    const intensity = params.arPortalPerspectiveIntensity || 1.0; 
+    const intensity = params.arPortalPerspectiveIntensity || 2.0; 
     const portalZ = Math.max(facePos.current.z * W * 0.8 * intensity, W * 0.15);
     
     // Scale X and Y based on portal dimensions (W and H) to ensure balanced movement

@@ -237,6 +237,8 @@ const App: React.FC = () => {
          p.targetPsi = math.psi;
          p.targetK = math.k * breathing;
          p.targetHue = (noteIndex * 30) % 360; // Circle of fifths approx
+         p.targetZ0_r = 0;
+         p.targetZ0_i = 0;
 
          geometryData = {
             V, E, alpha: math.alpha, beta: math.beta, regime: math.regime, name
@@ -254,6 +256,8 @@ const App: React.FC = () => {
         p.targetK = DEFAULT_PARAMS.k; 
         p.targetPsi += (frequency * 0.0002);
         p.targetHue = (p.currentParams.baseHue + 0.1) % 360;
+        p.targetZ0_r = 0;
+        p.targetZ0_i = 0;
       }
 
       // --- PHYSICS ---
@@ -268,14 +272,6 @@ const App: React.FC = () => {
       p.currentParams.baseHue = lerpAngle(p.currentParams.baseHue, p.targetHue, alpha * 0.5);
 
       setParams(prev => {
-        if (prev.arPortalMode) {
-          return {
-            ...prev,
-            baseHue: p.currentParams.baseHue,
-            genesisStage: p.genesisTargetStage,
-            geometryData: geometryData
-          };
-        }
         return {
           ...prev,
           k: p.currentParams.k,
