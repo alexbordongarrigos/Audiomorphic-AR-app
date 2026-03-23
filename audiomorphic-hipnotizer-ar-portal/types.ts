@@ -52,9 +52,7 @@ export interface VisualizerParams {
   autoSpeed: number; // Speed of the base pattern drift
   
   // Sacred Geometry Params (Genesis Mode)
-  spiralResonanceModes: SacredGeometryMode[]; // For the spiral (Genesis only)
-  sacredGeometryEnabled: boolean; // Enable SG layer anywhere
-  sacredGeometryModes: SacredGeometryMode[]; // For the separate SG layer
+  sgResonanceModes: SacredGeometryMode[];
   sgSettings: Record<SacredGeometryMode, SacredGeometrySettings>;
   sgShowNodes: boolean;
   sgDrawMode: 'nodes' | 'layers';
@@ -66,7 +64,6 @@ export interface VisualizerParams {
   vrDragRotation: boolean;
   vrDepth: number;
   vrDistance: number;
-  distanceZoom: number; // Distancia de separación y acercamiento
   vrSplitScreen: boolean;
   vrRadius: number;
   vrThickness: number;
@@ -76,18 +73,16 @@ export interface VisualizerParams {
   arFilter: 'none' | 'psychedelic' | 'noir' | 'neon' | 'glitch' | 'dream' | 'hypnotic';
   arIntensity: number;
   
-  // AR Portal
+  // AR Infinite Portal Params
   arPortalMode: boolean;
-  arPortalScale: number;
+  arPortalType: 'hipnosis' | 'ventana';
   arPortalPerspectiveIntensity: number;
-  arPortalVanishingRadius: number;
+  arPortalScale: number;
   arPortalFade: number;
-  arPortalBending: number;
+  arPortalVanishingRadius: number;
   
   // UI Params
   showIndicators: boolean;
-  menuTransparency: number;
-  menuAutoCloseTime: number;
   
   // Live Math Data (Read-only for UI)
   geometryData?: GeometryInfo;
@@ -131,9 +126,7 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   autoViscosity: 0.963, // Viscosidad
   autoSpeed: 1.0,     // Velocidad Deriva
 
-  spiralResonanceModes: ['flowerOfLife'],
-  sacredGeometryEnabled: false,
-  sacredGeometryModes: ['flowerOfLife'],
+  sgResonanceModes: ['flowerOfLife'],
   sgSettings: {
     goldenSpiral: { ...defaultSGSettings },
     flowerOfLife: { ...defaultSGSettings },
@@ -149,7 +142,6 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   vrDragRotation: false,
   vrDepth: 20,
   vrDistance: 0,
-  distanceZoom: 1.0,
   vrSplitScreen: false,
   vrRadius: 5,
   vrThickness: 2,
@@ -158,16 +150,14 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   arFilter: 'none',
   arIntensity: 0.5,
   
-  arPortalMode: false,
-  arPortalScale: 1.0,
-  arPortalPerspectiveIntensity: 1.0,
-  arPortalVanishingRadius: 1.0,
-  arPortalFade: 1.0,
-  arPortalBending: 0.0,
+  arPortalMode: true,
+  arPortalType: 'ventana',
+  arPortalPerspectiveIntensity: 1.212,
+  arPortalScale: 12.121,
+  arPortalFade: 1.212,
+  arPortalVanishingRadius: 0.121,
   
-  showIndicators: true,
-  menuTransparency: 0.8,
-  menuAutoCloseTime: 5
+  showIndicators: true
 };
 
 export interface AudioMetrics {

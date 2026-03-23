@@ -236,7 +236,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       
       // --- AUTO RESONANCE LOGIC ---
       let currentSgSettings = p.sgSettings;
-      if (p.autoPilotMode === 'genesis' && p.sgAutoResonance) {
+      const hasSpiralModes = p.spiralResonanceModes && p.spiralResonanceModes.length > 0;
+      if ((p.autoPilotMode === 'genesis' || p.sacredGeometryEnabled || hasSpiralModes) && p.sgAutoResonance) {
           const t = timeRef.current;
           currentSgSettings = { ...p.sgSettings };
           const modes: ('goldenSpiral' | 'flowerOfLife' | 'quantumWave' | 'torus')[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus'];
@@ -258,7 +259,10 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               
               // Opacity: Base 0.5 for lines, 0.1 for bg. 
               // Adjusted by activeCount to prevent white-out, but kept highly visible.
-              const activeCount = p.sgResonanceModes?.length || 1;
+              const activeSpiralModes = p.spiralResonanceModes || [];
+              const activeSgModes = p.sacredGeometryEnabled ? (p.sacredGeometryModes || []) : [];
+              const uniqueActiveModes = new Set([...activeSpiralModes, ...activeSgModes]);
+              const activeCount = Math.max(1, uniqueActiveModes.size);
               const opacityDamping = Math.sqrt(activeCount);
               
               const lineOpacity = (0.4 + sVol * 0.2 + fastOsc * 0.1) / opacityDamping;
@@ -302,7 +306,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
 
       // 3. Zoom/Scale
       const minDim = Math.min(width, height);
-      const responsiveZoom = p.zoom * minDim;
+      const responsiveZoom = p.zoom * (p.distanceZoom || 1.0) * minDim;
 
       // Prepare Math
       const rotReal = Math.cos(dynamicPsi);
@@ -337,8 +341,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       const spiralPoints: {x: number, y: number, mag: number, angle: number}[] = [];
 
       // --- NEW LAYERED VISUALIZATION (BACKGROUND) ---
-      if (p.autoPilotMode === 'genesis' && p.geometryData && p.sgDrawMode === 'layers') {
-          const modes = p.sgResonanceModes || ['flowerOfLife'];
+      if (p.sacredGeometryEnabled && p.sgDrawMode === 'layers') {
+          const modes = p.sacredGeometryModes || ['flowerOfLife'];
           const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
           
           activeModes.forEach((mode, modeIndex) => {
@@ -348,7 +352,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               const flowSpeed = settings.flowSpeed * 0.5;
               const timeOffset = timeRef.current * flowSpeed;
               
-              const regime = p.geometryData!.regime;
+              const regime = p.geometryData?.regime || 'primary';
               const baseLightness = regime === 'reciprocal' ? p.brightness + 30 : p.brightness + 15;
               
               for (let i = 0; i < numLayers; i++) {
@@ -421,12 +425,12 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
         let px = cx + zReal * responsiveZoom;
         let py = cy - zImag * responsiveZoom;
 
-        // --- METAPHYSICAL PERTURBATION (Genesis Mode) ---
+        // --- METAPHYSICAL PERTURBATION ---
         // Modulate the spiral's path organically based on the selected sacred geometry
-        if (p.autoPilotMode === 'genesis') {
+        const activeSpiralModes = p.spiralResonanceModes || [];
+        if (activeSpiralModes.length > 0) {
             const t = timeRef.current * 0.2;
-            const modes = p.sgResonanceModes || ['flowerOfLife'];
-            const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
+            const activeModes = activeSpiralModes;
             
             let totalOffsetX = 0;
             let totalOffsetY = 0;
@@ -467,7 +471,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
         prevY = py;
         
         // Store point for sacred geometry
-        if (p.autoPilotMode === 'genesis') {
+        if (p.sacredGeometryEnabled || activeSpiralModes.length > 0) {
             const mag = Math.sqrt(zReal*zReal + zImag*zImag);
             const angle = Math.atan2(zImag, zReal);
             spiralPoints.push({x: px, y: py, mag, angle});
@@ -501,7 +505,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       ctx.shadowBlur = 0;
 
       // Draw Sacred Geometry Web (Nodes)
-      if (p.autoPilotMode === 'genesis' && p.geometryData && spiralPoints.length > 0) {
+      if (p.sacredGeometryEnabled && spiralPoints.length > 0) {
           
           if (p.sgDrawMode === 'nodes' && p.sgShowNodes) {
               // --- ORIGINAL EMANATING NODES ---
@@ -525,7 +529,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   };
               };
 
-              const modes = p.sgResonanceModes || ['flowerOfLife'];
+              const modes = p.sacredGeometryModes || ['flowerOfLife'];
               const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
               
               activeModes.forEach((mode, modeIndex) => {
@@ -549,7 +553,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                       const hueOffset = (i / numNodes) * p.hueRange * 0.5;
                       const nodeHue = (displayBaseHue + hueOffset) % 360;
                       
-                      const regime = p.geometryData!.regime;
+                      const regime = p.geometryData?.regime || 'primary';
                       const baseLightness = regime === 'reciprocal' ? p.brightness + 30 : p.brightness + 15;
                       const nodeLightness = Math.min(100, baseLightness + sVol * 40 * settings.audioReactivity);
                       

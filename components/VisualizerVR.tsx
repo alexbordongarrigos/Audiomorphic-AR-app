@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { StereoEffect } from 'three-stdlib';
 import { EffectComposer, Bloom, Noise, HueSaturation, Vignette, Glitch, ChromaticAberration, ColorAverage, DepthOfField } from '@react-three/postprocessing';
 import { BlendFunction, GlitchMode } from 'postprocessing';
+import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { VisualizerParams } from '../types';
 import ControlPanel from './ControlPanel';
 
@@ -18,6 +19,132 @@ interface VisualizerVRProps {
   audioActive: boolean;
   toggleAudio: () => void;
 }
+
+const useFaceTracker = (enabled: boolean) => {
+  const facePositionRef = useRef({ x: 0, y: 0, z: 5 });
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const requestRef = useRef<number>(0);
+  const [hasCamera, setHasCamera] = useState(true);
+  const landmarkerRef = useRef<FaceLandmarker | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      facePositionRef.current = { x: 0, y: 0, z: 5 };
+      return;
+    }
+
+    let isMounted = true;
+    const init = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        );
+        const landmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+            delegate: "GPU"
+          },
+          outputFaceBlendshapes: false,
+          runningMode: "VIDEO",
+          numFaces: 1
+        });
+        if (!isMounted) {
+          landmarker.close();
+          return;
+        }
+        landmarkerRef.current = landmarker;
+
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        videoRef.current = video;
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        if (!isMounted) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        video.srcObject = stream;
+        
+        await new Promise((resolve) => {
+          video.onloadedmetadata = () => resolve(true);
+        });
+        video.play();
+
+        let lastVideoTime = -1;
+        const detectFace = () => {
+          if (!isMounted || !videoRef.current || !landmarkerRef.current) return;
+          if (videoRef.current.readyState >= 2) {
+            if (videoRef.current.currentTime !== lastVideoTime) {
+              lastVideoTime = videoRef.current.currentTime;
+              try {
+                const results = landmarkerRef.current.detectForVideo(videoRef.current, performance.now());
+                if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                  const landmarks = results.faceLandmarks[0];
+                  const nose = landmarks[1];
+                  const leftCheek = landmarks[234];
+                  const rightCheek = landmarks[454];
+                  const faceWidth = Math.sqrt(
+                    Math.pow(leftCheek.x - rightCheek.x, 2) + 
+                    Math.pow(leftCheek.y - rightCheek.y, 2)
+                  );
+                  const rawX = (0.5 - nose.x) * 2.0; 
+                  const rawY = (0.5 - nose.y) * 2.0; 
+                  const clampedFaceWidth = Math.max(Math.min(faceWidth, 0.6), 0.05);
+                  const rawZ = 0.15 / clampedFaceWidth;
+                  const prev = facePositionRef.current;
+                  facePositionRef.current = {
+                    x: prev.x * 0.4 + rawX * 0.6,
+                    y: prev.y * 0.4 + rawY * 0.6,
+                    z: prev.z * 0.4 + rawZ * 0.6
+                  };
+                }
+              } catch (e) {}
+            }
+          }
+          requestRef.current = requestAnimationFrame(detectFace);
+        };
+        detectFace();
+      } catch (err) {
+        console.error("Face tracking error, falling back to mouse:", err);
+        setHasCamera(false);
+      }
+    };
+
+    init();
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!hasCamera) {
+        const nx = (e.clientX / window.innerWidth) * 2 - 1;
+        const ny = -(e.clientY / window.innerHeight) * 2 + 1;
+        const prev = facePositionRef.current;
+        facePositionRef.current = {
+          x: prev.x + (nx - prev.x) * 0.1,
+          y: prev.y + (ny - prev.y) * 0.1,
+          z: 5
+        };
+      }
+    };
+
+    if (!hasCamera) {
+      window.addEventListener('mousemove', handleMouseMove);
+    }
+
+    return () => {
+      isMounted = false;
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (videoRef.current) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        if (stream) stream.getTracks().forEach(track => track.stop());
+      }
+      if (landmarkerRef.current) landmarkerRef.current.close();
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [hasCamera, enabled]);
+
+  return facePositionRef;
+};
 
 // A component to handle the device orientation (gyroscope) if not in WebXR
 // Replaced by DeviceOrientationControls from drei
@@ -240,6 +367,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
   }, [params.iter]);
 
   const geometryRef = useRef<THREE.BufferGeometry>(null);
+  const { size } = useThree();
 
   useFrame((state, delta) => {
     if (!lineRef.current || !geometryRef.current) return;
@@ -251,9 +379,60 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
     const sVol = smoothedVolRef.current;
     const sFreq = smoothedFreqRef.current;
 
-    const kPulse = (params.k - 1) + (sVol * 0.005); 
+    let currentK = params.k;
+    let currentPsi = params.psi;
+    let currentZ0r = params.z0_r;
+    let currentZ0i = params.z0_i;
+
+    if (params.autoPilot) {
+      const t = timeRef.current * params.autoSpeed * 0.05;
+      if (params.autoPilotMode === 'drift') {
+        currentK = 1.0 + Math.sin(t * 0.5) * 0.1;
+        currentPsi = t * 0.1;
+        currentZ0r = Math.sin(t * 0.3) * 0.5;
+        currentZ0i = Math.cos(t * 0.4) * 0.5;
+      } else if (params.autoPilotMode === 'harmonic') {
+        currentK = 1.0 + sVol * 0.2 + Math.sin(t) * 0.05;
+        currentPsi = params.psi + sFreq * 0.1 + t * 0.2;
+        currentZ0r = Math.sin(t * 0.5 + sFreq) * 0.3;
+        currentZ0i = Math.cos(t * 0.5 + sVol) * 0.3;
+      } else if (params.autoPilotMode === 'genesis') {
+        const phaseT = (t % 5) / 5;
+        const phase = Math.floor(t / 5) % 4;
+        if (phase === 0) { // Semilla
+          currentK = 1.0 + phaseT * 0.05;
+          currentPsi = phaseT * Math.PI * 0.5;
+          currentZ0r = 0;
+          currentZ0i = 0;
+        } else if (phase === 1) { // Expansión
+          currentK = 1.05 + phaseT * 0.2;
+          currentPsi = Math.PI * 0.5 + phaseT * Math.PI;
+          currentZ0r = 0;
+          currentZ0i = 0;
+        } else if (phase === 2) { // Complejidad
+          currentK = 1.25 + Math.sin(phaseT * Math.PI * 4) * 0.1;
+          currentPsi = Math.PI * 1.5 + phaseT * Math.PI * 2;
+          currentZ0r = 0;
+          currentZ0i = 0;
+        } else { // Trascendencia
+          currentK = 1.25 - phaseT * 0.25;
+          currentPsi = Math.PI * 3.5 + phaseT * Math.PI * 4;
+          currentZ0r = 0;
+          currentZ0i = 0;
+        }
+      }
+    }
+
+    if (params.arPortalMode) {
+      currentZ0r = 0;
+      currentZ0i = 0;
+      currentK = params.k;
+      currentPsi = params.psi;
+    }
+
+    const kPulse = (currentK - 1) + (sVol * 0.005); 
     const dynamicK = 1.0 + kPulse;
-    const dynamicPsi = params.psi + (sFreq * 0.05);
+    const dynamicPsi = currentPsi + (sFreq * 0.05);
 
     const rotReal = Math.cos(dynamicPsi);
     const rotImag = Math.sin(dynamicPsi);
@@ -266,7 +445,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
 
     // --- AUTO RESONANCE LOGIC ---
     let currentSgSettings = params.sgSettings;
-    if (params.autoPilotMode === 'genesis' && params.sgAutoResonance) {
+    if ((params.autoPilotMode === 'genesis' || params.sacredGeometryEnabled) && params.sgAutoResonance) {
         const t = timeRef.current;
         currentSgSettings = { ...params.sgSettings };
         const modes: ('goldenSpiral' | 'flowerOfLife' | 'quantumWave' | 'torus')[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus'];
@@ -281,7 +460,13 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
             
             const complexity = Math.max(2, Math.min(4, Math.floor(3 + slowOsc + sVol * 1.5)));
             const scale = 0.1 + (sVol * 0.03) + (midOsc * 0.02);
-            const activeCount = params.sgResonanceModes?.length || 1;
+            
+            // Calculate active count combining both spiral and sacred geometry modes
+            const activeSpiralModes = params.autoPilotMode === 'genesis' ? (params.spiralResonanceModes || []) : [];
+            const activeSgModes = params.sacredGeometryEnabled ? (params.sacredGeometryModes || []) : [];
+            const uniqueActiveModes = new Set([...activeSpiralModes, ...activeSgModes]);
+            const activeCount = Math.max(1, uniqueActiveModes.size);
+            
             const opacityDamping = Math.sqrt(activeCount);
             
             const lineOpacity = (0.4 + sVol * 0.2 + fastOsc * 0.1) / opacityDamping;
@@ -328,36 +513,83 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
     // If symmetric, we stretch the depth massively to make it feel truly infinite
     const effectiveDepth = params.vrSymmetric ? params.vrDepth * 10 : params.vrDepth;
 
+    const portalScale = Math.max(0.1, params.arPortalScale ?? 1.0);
+    const W = 30 * portalScale;
+    const aspect = Math.max(size.width / Math.max(size.height, 1), 0.1);
+    const H = W / aspect;
+    const screenDiag = Math.sqrt(W*W + H*H) / 2;
+
+    let tempZReal = 1.0 + (sVol * 0.2);
+    let tempZImag = 0.0;
+    for (let i = 0; i < params.iter; i++) {
+        const zrK = tempZReal * dynamicK;
+        const ziK = tempZImag * dynamicK;
+        tempZReal = (zrK * rotReal - ziK * rotImag) + currentZ0r;
+        tempZImag = (zrK * rotImag + ziK * rotReal) + currentZ0i;
+        if (Math.abs(tempZReal) > 1e150 || Math.abs(tempZImag) > 1e150) {
+            tempZReal = Math.sign(tempZReal) * 1e150;
+            tempZImag = Math.sign(tempZImag) * 1e150;
+            break;
+        }
+    }
+    const max_px = tempZReal * zoom;
+    const max_py = tempZImag * zoom;
+    const max_dist = Math.sqrt(max_px*max_px + max_py*max_py);
+    const log_max_dist = Math.log1p(max_dist);
+
     for (let n = 0; n < params.iter; n++) {
       const zrK = zReal * dynamicK;
       const ziK = zImag * dynamicK;
 
-      let nextReal = (zrK * rotReal - ziK * rotImag) + params.z0_r;
-      let nextImag = (zrK * rotImag + ziK * rotReal) + params.z0_i;
+      let nextReal = (zrK * rotReal - ziK * rotImag) + currentZ0r;
+      let nextImag = (zrK * rotImag + ziK * rotReal) + currentZ0i;
+      
+      if (Math.abs(nextReal) > 1e150) nextReal = Math.sign(nextReal) * 1e150;
+      if (Math.abs(nextImag) > 1e150) nextImag = Math.sign(nextImag) * 1e150;
 
       zReal = nextReal;
       zImag = nextImag;
 
-      let px = zReal * zoom;
-      let py = zImag * zoom;
+      let px_base = zReal * zoom;
+      let py_base = zImag * zoom;
       
-      // Continuous spiral from -effectiveDepth/2 to +effectiveDepth/2
-      let pz = (n / params.iter - 0.5) * effectiveDepth;
+      const dist = Math.sqrt(px_base*px_base + py_base*py_base);
+      const angle = Math.atan2(py_base, px_base);
+      
+      let px = px_base;
+      let py = py_base;
+      let pz = 0;
 
-      // Make it a portal around the user by adding vrRadius
-      const dist = Math.sqrt(px*px + py*py);
-      const angle = Math.atan2(py, px);
-      
-      // In symmetric mode, we use a logarithmic scale to flatten the exponential growth
-      // of the complex recurrence. This turns the expanding cone into a uniform 3D cylinder/tunnel.
-      const radiusFactor = params.vrSymmetric ? (Math.log1p(dist) * 5 + params.vrRadius) : (dist + params.vrRadius);
-      
-      px = Math.cos(angle) * radiusFactor;
-      py = Math.sin(angle) * radiusFactor;
+      if (params.arPortalMode) {
+        const depthRatio = n / params.iter;
+        let pz_portal = (depthRatio - 1.0) * effectiveDepth;
+        
+        const vRad = params.arPortalVanishingRadius ?? 0.5;
+        const hollowRadius = screenDiag * vRad;
+        const growthSpace = screenDiag - hollowRadius;
+        
+        const normalized_log_dist = Math.log1p(dist) / (log_max_dist || 1);
+        const portal_radius = hollowRadius + normalized_log_dist * growthSpace;
+        
+        px = Math.cos(angle) * portal_radius;
+        py = Math.sin(angle) * portal_radius;
+        pz = pz_portal;
+      } else {
+        // Continuous spiral from -effectiveDepth/2 to +effectiveDepth/2
+        pz = (n / params.iter - 0.5) * effectiveDepth;
+
+        // Make it a portal around the user by adding vrRadius
+        // In symmetric mode, we use a logarithmic scale to flatten the exponential growth
+        // of the complex recurrence. This turns the expanding cone into a uniform 3D cylinder/tunnel.
+        let radiusFactor = params.vrSymmetric ? (Math.log1p(dist) * 5 + params.vrRadius) : (dist + params.vrRadius);
+        
+        px = Math.cos(angle) * radiusFactor;
+        py = Math.sin(angle) * radiusFactor;
+      }
 
       // Genesis perturbation
-      if (params.autoPilotMode === 'genesis') {
-          const modes = params.sgResonanceModes || ['flowerOfLife'];
+      if (params.autoPilotMode === 'genesis' && !params.arPortalMode) {
+          const modes = params.spiralResonanceModes || ['flowerOfLife'];
           const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
           
           let totalOffsetX = 0;
@@ -415,6 +647,14 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
           }
           edgeFade = Math.pow(edgeFade, 1.5); // Smooth easing
       }
+      
+      if (params.arPortalMode) {
+        const depthRatio = n / params.iter;
+        const normalizedDepth = 1.0 - depthRatio;
+        const fadeFactor = 1.0 - (normalizedDepth * (params.arPortalFade ?? 1.0));
+        const targetEdgeFade = Math.max(0, fadeFactor);
+        edgeFade = targetEdgeFade;
+      }
 
       // Color gradient along the spiral
       const hue = (displayBaseHue + (n / params.iter) * params.hueRange) % 360;
@@ -443,8 +683,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
     const sgPositions = sgPositionsRef.current;
     const sgColors = sgColorsRef.current;
 
-    if (params.autoPilotMode === 'genesis' && params.geometryData) {
-        const modes = params.sgResonanceModes || ['flowerOfLife'];
+    if (params.sacredGeometryEnabled && params.geometryData && !params.arPortalMode) {
+        const modes = params.sacredGeometryModes || ['flowerOfLife'];
         const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
         const regime = params.geometryData.regime;
         const baseLightness = regime === 'reciprocal' ? params.brightness + 30 : params.brightness + 15;
@@ -657,13 +897,13 @@ const VRMenu = ({ params, setParams, audioActive, toggleAudio, visible }: any) =
   );
 };
 
-const CameraUpdater = ({ distance, isSymmetric }: { distance: number, isSymmetric: boolean }) => {
+const CameraUpdater = ({ distance, isSymmetric, arPortalMode }: { distance: number, isSymmetric: boolean, arPortalMode: boolean }) => {
   const { camera } = useThree();
   useFrame(() => {
     // In symmetric mode (infinite tunnel), the user is exactly in the center (Z=0).
     // Otherwise, they are looking at the portal from the specified distance.
     // We only update the camera position if not in VR, as the VR headset controls its own position.
-    if (!store.getState().session) {
+    if (!store.getState().session && !arPortalMode) {
       const targetZ = isSymmetric ? 0 : distance;
       camera.position.z += (targetZ - camera.position.z) * 0.05;
     }
@@ -671,78 +911,119 @@ const CameraUpdater = ({ distance, isSymmetric }: { distance: number, isSymmetri
   return null;
 };
 
-const CameraBackground = ({ active, store }: { active: boolean, store: any }) => {
-  const { scene, gl } = useThree();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const textureRef = useRef<THREE.VideoTexture | null>(null);
-
-  useEffect(() => {
-    if (!active) {
-      if (videoRef.current) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-        videoRef.current = null;
+const DynamicCamera = ({ 
+  params, 
+  targetGroupRef,
+  facePos 
+}: { 
+  params: VisualizerParams, 
+  targetGroupRef: React.RefObject<THREE.Group>,
+  facePos: React.MutableRefObject<{x: number, y: number, z: number}> 
+}) => {
+  const { camera, size } = useThree();
+  const isFirstFrame = useRef(true);
+  
+  useFrame(() => {
+    if (!params.arPortalMode || store.getState().session) {
+      if (isFirstFrame.current) {
+        isFirstFrame.current = false;
       }
-      if (textureRef.current) {
-        textureRef.current.dispose();
-        textureRef.current = null;
+      if (camera instanceof THREE.PerspectiveCamera) {
+        camera.fov = 75;
+        camera.updateProjectionMatrix();
+        camera.position.x += (0 - camera.position.x) * 0.1;
+        camera.position.y += (0 - camera.position.y) * 0.1;
+        camera.rotation.set(0, 0, 0);
       }
-      scene.background = null;
+      if (targetGroupRef.current) {
+        targetGroupRef.current.rotation.set(0, 0, 0);
+      }
       return;
     }
+    
+    const portalScale = Math.max(0.1, params.arPortalScale ?? 1.0);
+    const W = 30 * portalScale;
+    const aspect = Math.max(size.width / Math.max(size.height, 1), 0.1);
+    const H = W / aspect;
 
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = true;
-    videoRef.current = video;
+    const intensity = params.arPortalPerspectiveIntensity || 1.0; 
+    const portalZ = Math.max(facePos.current.z * W * 0.8 * intensity, W * 0.15);
+    
+    // Scale X and Y based on portal dimensions (W and H) to ensure balanced movement
+    // across any screen size and aspect ratio.
+    const portalX = facePos.current.x * 0.6 * portalZ * intensity;
+    const portalY = facePos.current.y * 0.6 * portalZ * (1 / aspect) * intensity;
+    
+    const targetPos = new THREE.Vector3(portalX, portalY, portalZ);
+    
+    if (isFirstFrame.current) {
+      camera.position.copy(targetPos);
+      isFirstFrame.current = false;
+    } else {
+      camera.position.lerp(targetPos, 0.25);
+    }
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const n = camera.near;
+      const f = camera.far;
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        if (!videoRef.current) return;
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        
-        const texture = new THREE.VideoTexture(videoRef.current);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        textureRef.current = texture;
-        scene.background = texture;
-      })
-      .catch(err => {
-        console.error("Error accessing camera:", err?.message || err);
-      });
+      const z_c = Math.max(camera.position.z, 0.01);
+      const x_c = camera.position.x;
+      const y_c = camera.position.y;
 
-    return () => {
-      if (videoRef.current) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-      }
-      if (textureRef.current) {
-        textureRef.current.dispose();
-      }
-      scene.background = null;
-    };
-  }, [active, scene, gl]);
+      const portalLeft = (-W / 2 - x_c) * (n / z_c);
+      const portalRight = (W / 2 - x_c) * (n / z_c);
+      const portalBottom = (-H / 2 - y_c) * (n / z_c);
+      const portalTop = (H / 2 - y_c) * (n / z_c);
 
-  useFrame(() => {
-    if (active && textureRef.current) {
-      const session = store.getState().session;
-      if (session && session.mode === 'immersive-ar') {
-        scene.background = null;
-      } else {
-        scene.background = textureRef.current;
-      }
+      camera.projectionMatrix.makePerspective(portalLeft, portalRight, portalTop, portalBottom, n, f);
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+      
+      // Calculate straight rotation based on camera position relative to the portal center
+      const targetRotX = Math.atan2(y_c, z_c);
+      const targetRotY = Math.atan2(-x_c, z_c);
+      
+      const bending = params.arPortalBending ?? 0.0;
+      
+      // Apply bending to X and Y, but keep Z fixed to 0 to prevent depth bending
+      const finalRotX = targetRotX * bending;
+      const finalRotY = targetRotY * bending;
+
+      camera.rotation.x += (finalRotX - camera.rotation.x) * 0.2;
+      camera.rotation.y += (finalRotY - camera.rotation.y) * 0.2;
+      camera.rotation.z += (0 - camera.rotation.z) * 0.2; // Fix depth rotation strictly to 0
+    }
+
+    if (targetGroupRef.current) {
+      // The spiral group should counter-rotate if we want it to stay straight relative to the perspective
+      const bending = params.arPortalBending ?? 0.0;
+      const z_c = Math.max(camera.position.z, 0.01);
+      const x_c = camera.position.x;
+      const y_c = camera.position.y;
+      
+      const targetRotX = Math.atan2(-y_c, z_c) * bending;
+      const targetRotY = Math.atan2(x_c, z_c) * bending;
+      
+      targetGroupRef.current.rotation.x += (targetRotX - targetGroupRef.current.rotation.x) * 0.1;
+      targetGroupRef.current.rotation.y += (targetRotY - targetGroupRef.current.rotation.y) * 0.1;
+      targetGroupRef.current.rotation.z += (0 - targetGroupRef.current.rotation.z) * 0.1; // Fix depth rotation strictly to 0
     }
   });
 
   return null;
 };
 
-// Component to handle dragging the environment
+const BackgroundHandler = ({ store }: { store: any }) => {
+  const { scene } = useThree();
+  useFrame(() => {
+    const session = store.getState().session;
+    if (session && session.mode === 'immersive-ar') {
+      scene.background = null;
+    } else {
+      scene.background = new THREE.Color('#050505');
+    }
+  });
+  return null;
+};
 const DragRotation = ({ active, targetGroupRef }: { active: boolean, targetGroupRef: React.RefObject<THREE.Group> }) => {
   const { gl } = useThree();
   const isDragging = useRef(false);
@@ -911,6 +1192,7 @@ const VisualizerVR: React.FC<VisualizerVRProps> = ({ params, getAudioMetrics, se
   const [hasOrientation, setHasOrientation] = useState(false);
   const [menuVisible, setMenuVisible] = useState(true);
   const spiralGroupRef = useRef<THREE.Group>(null);
+  const facePos = useFaceTracker(params.arPortalMode);
 
   useEffect(() => {
     // Check if device has orientation sensor
@@ -941,10 +1223,10 @@ const VisualizerVR: React.FC<VisualizerVRProps> = ({ params, getAudioMetrics, se
   }, []);
 
   return (
-    <div className={`w-full h-full relative ${params.arMode ? 'bg-transparent' : 'bg-black'}`} style={{ touchAction: 'none' }}>
+    <div className={`w-full h-full relative ${(params.arMode || params.arPortalMode) ? 'bg-transparent' : 'bg-black'}`} style={{ touchAction: 'none' }}>
       {params.showIndicators && (
         <div className="absolute top-4 left-4 z-50 flex gap-2">
-          {!params.arMode ? (
+          {!(params.arMode || params.arPortalMode) ? (
             <button 
               onClick={() => {
                 store.enterVR().catch((err) => {
@@ -973,28 +1255,28 @@ const VisualizerVR: React.FC<VisualizerVRProps> = ({ params, getAudioMetrics, se
       )}
 
       <Canvas 
-        camera={{ position: [0, 0, params.vrDistance], fov: 75 }}
+        camera={{ position: [0, 0, params.vrDistance], fov: 75, far: 10000 }}
         onPointerMissed={() => setMenuVisible(v => !v)}
       >
-        {!params.arMode && <color attach="background" args={['#050505']} />}
+        <BackgroundHandler store={store} />
         <ambientLight intensity={0.5} />
         
         <XR store={store}>
-          <group ref={spiralGroupRef}>
+          <group ref={spiralGroupRef} scale={[params.distanceZoom || 1.0, params.distanceZoom || 1.0, params.distanceZoom || 1.0]}>
             <Spiral3D params={params} getAudioMetrics={getAudioMetrics} />
           </group>
-          <VRMenu params={params} setParams={setParams} audioActive={audioActive} toggleAudio={toggleAudio} visible={menuVisible} />
+          <VRMenu params={params} setParams={setParams} audioActive={audioActive} toggleAudio={toggleAudio} visible={menuVisible && params.vrMode && !params.arMode && !params.arPortalMode} />
         </XR>
 
-        {hasOrientation && <DeviceOrientationControls />}
+        {hasOrientation && !params.arPortalMode && <DeviceOrientationControls />}
         
-        <DragRotation active={true} targetGroupRef={spiralGroupRef} />
+        <DragRotation active={!params.arPortalMode} targetGroupRef={spiralGroupRef} />
         
-        <CameraUpdater distance={params.vrDistance} isSymmetric={params.vrSymmetric} />
+        <CameraUpdater distance={params.vrDistance} isSymmetric={params.vrSymmetric} arPortalMode={params.arPortalMode} />
+        <DynamicCamera params={params} targetGroupRef={spiralGroupRef} facePos={facePos} />
         <StereoCamera active={params.vrSplitScreen} />
-        <CameraBackground active={params.arMode} store={store} />
         
-        {params.arMode && <AREffects filter={params.arFilter} intensity={params.arIntensity} getAudioMetrics={getAudioMetrics} />}
+        {(params.arMode || params.arPortalMode) && <AREffects filter={params.arFilter} intensity={params.arIntensity} getAudioMetrics={getAudioMetrics} />}
       </Canvas>
     </div>
   );

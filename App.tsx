@@ -93,10 +93,28 @@ const calculateHarmonicGeometry = (V: number, E: number): {
 const App: React.FC = () => {
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
   const { isActive, startAudio, stopAudio, getAudioMetrics } = useAudioAnalyzer();
-  const [controlsVisible, setControlsVisible] = useState(true);
-  
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const resetHideTimer = useCallback(() => {
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    hideTimeoutRef.current = setTimeout(() => {
+      setControlsVisible(false);
+    }, params.menuAutoCloseTime * 1000);
+  }, [params.menuAutoCloseTime]);
+
+  useEffect(() => {
+    if (controlsVisible) {
+      resetHideTimer();
+    } else {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    }
+    return () => {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    };
+  }, [controlsVisible, resetHideTimer]);
+
   // Logic Refs
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animationFrameRef = useRef<number>(0);
   
   // --- PILOT STATE ---
@@ -118,14 +136,6 @@ const App: React.FC = () => {
       startAudio();
     }
   };
-
-  const handleUserActivity = useCallback(() => {
-    setControlsVisible(true);
-    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-    hideTimeoutRef.current = setTimeout(() => {
-      setControlsVisible(false);
-    }, 4000);
-  }, []);
 
   // --- AUTO PILOT ENGINE ---
   useEffect(() => {
@@ -257,16 +267,26 @@ const App: React.FC = () => {
       p.currentParams.z0_i = lerp(p.currentParams.z0_i, p.targetZ0_i, alpha);
       p.currentParams.baseHue = lerpAngle(p.currentParams.baseHue, p.targetHue, alpha * 0.5);
 
-      setParams(prev => ({
-        ...prev,
-        k: p.currentParams.k,
-        psi: p.currentParams.psi,
-        z0_r: p.currentParams.z0_r,
-        z0_i: p.currentParams.z0_i,
-        baseHue: p.currentParams.baseHue,
-        genesisStage: p.genesisTargetStage,
-        geometryData: geometryData // Pass data to UI
-      }));
+      setParams(prev => {
+        if (prev.arPortalMode) {
+          return {
+            ...prev,
+            baseHue: p.currentParams.baseHue,
+            genesisStage: p.genesisTargetStage,
+            geometryData: geometryData
+          };
+        }
+        return {
+          ...prev,
+          k: p.currentParams.k,
+          psi: p.currentParams.psi,
+          z0_r: p.currentParams.z0_r,
+          z0_i: p.currentParams.z0_i,
+          baseHue: p.currentParams.baseHue,
+          genesisStage: p.genesisTargetStage,
+          geometryData: geometryData
+        };
+      });
 
       animationFrameRef.current = requestAnimationFrame(updateLoop);
     };
@@ -279,27 +299,14 @@ const App: React.FC = () => {
     };
   }, [params.autoPilot, params.autoPilotMode, params.autoSpeed, params.autoViscosity, params.rootNote, isActive]); 
 
-  // Event Listeners
-  useEffect(() => {
-    window.addEventListener('mousemove', handleUserActivity);
-    window.addEventListener('touchstart', handleUserActivity);
-    window.addEventListener('click', handleUserActivity);
-    window.addEventListener('keydown', handleUserActivity);
-    handleUserActivity();
-    return () => {
-      window.removeEventListener('mousemove', handleUserActivity);
-      window.removeEventListener('touchstart', handleUserActivity);
-      window.removeEventListener('click', handleUserActivity);
-      window.removeEventListener('keydown', handleUserActivity);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [handleUserActivity]);
-
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-black text-white relative">
+    <div 
+      className="flex h-screen w-screen overflow-hidden bg-black text-white relative"
+      onPointerDown={() => setControlsVisible(true)}
+      onPointerMove={() => { if (controlsVisible) resetHideTimer(); }}
+    >
       <div className="absolute inset-0 z-0">
-        {params.vrMode ? (
+        {(params.vrMode || params.arPortalMode) ? (
           <VisualizerVR 
             params={params} 
             getAudioMetrics={getAudioMetrics}
@@ -315,9 +322,9 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {!params.vrMode && params.showIndicators && (
-        <div className="absolute top-6 right-6 flex gap-4 pointer-events-none z-20 transition-opacity duration-500" style={{ opacity: controlsVisible ? 1 : 0.5 }}>
-           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono backdrop-blur-sm transition-colors duration-300
+      {!(params.vrMode || params.arPortalMode) && params.showIndicators && (
+        <div className="absolute top-6 right-6 flex gap-4 z-20 transition-opacity duration-500" style={{ opacity: controlsVisible ? 1 : 0.5 }}>
+           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-mono backdrop-blur-sm transition-colors duration-300 pointer-events-none
              ${isActive 
                ? 'bg-red-500/10 border-red-500/40 text-red-400 animate-pulse' 
                : 'bg-gray-800/30 border-gray-700 text-gray-500'}
@@ -336,26 +343,39 @@ const App: React.FC = () => {
       </div>
       )}
 
-      {!params.vrMode && (
-        <div 
-          className={`
-            absolute top-1/2 left-1/2 z-30 w-[90vw] max-w-5xl h-[85vh]
-            transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
-            ${controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
-          `}
-          onMouseEnter={() => {
-             if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-             setControlsVisible(true);
-          }}
-          onMouseLeave={handleUserActivity}
-        >
-          <ControlPanel 
-            params={params} 
-            setParams={setParams} 
-            audioActive={isActive}
-            toggleAudio={toggleAudio}
+      {!(params.vrMode) && (
+        <>
+          {/* Overlay to close menu when clicking outside */}
+          <div 
+            className={`absolute inset-0 z-20 transition-opacity duration-500 ${controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setControlsVisible(false);
+            }}
+            onPointerMove={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
           />
-        </div>
+          <div 
+            className={`
+              absolute top-1/2 left-1/2 z-30 w-[95vw] md:w-[90vw] max-w-5xl h-[90vh] flex flex-col
+              transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]
+              ${controlsVisible ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}
+            `}
+            onPointerDown={(e) => { e.stopPropagation(); resetHideTimer(); }}
+            onPointerMove={(e) => { e.stopPropagation(); resetHideTimer(); }}
+            onTouchMove={(e) => { e.stopPropagation(); resetHideTimer(); }}
+            onWheel={(e) => { e.stopPropagation(); resetHideTimer(); }}
+          >
+            <ControlPanel 
+              params={params} 
+              setParams={setParams} 
+              audioActive={isActive}
+              toggleAudio={toggleAudio}
+              onClose={() => setControlsVisible(false)}
+            />
+          </div>
+        </>
       )}
     </div>
   );

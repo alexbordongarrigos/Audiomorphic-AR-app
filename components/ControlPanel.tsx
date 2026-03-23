@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings } from '../types';
-import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download } from 'lucide-react';
+import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X } from 'lucide-react';
 
 interface ControlPanelProps {
   params: VisualizerParams;
   setParams: React.Dispatch<React.SetStateAction<VisualizerParams>>;
   audioActive: boolean;
   toggleAudio: () => void;
+  onClose?: () => void;
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioActive, toggleAudio }) => {
+const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioActive, toggleAudio, onClose }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
 
@@ -17,17 +18,58 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     window.open("https://drive.google.com/drive/folders/1bZ8yvbWr7r3eJUdKIQCSSuu-p398mAkn?usp=sharing", "_blank");
   };
 
+  const wakeLockRef = useRef<any>(null);
+
   useEffect(() => {
-    const handleFullScreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const handleFullScreenChange = async () => {
+      const isFull = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullscreen(isFull);
+      
+      if (isFull) {
+        try {
+          if ('wakeLock' in navigator) {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          }
+        } catch (err) {
+          console.error(`Wake Lock error: ${err}`);
+        }
+      } else {
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release().then(() => {
+            wakeLockRef.current = null;
+          }).catch((err: any) => console.error(err));
+        }
+      }
+    };
     document.addEventListener('fullscreenchange', handleFullScreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      if (wakeLockRef.current) {
+         wakeLockRef.current.release().catch(() => {});
+      }
+    };
   }, []);
 
   const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(err => console.error(err));
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen();
+    const doc = document as any;
+    const docEl = document.documentElement as any;
+
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch((err: any) => console.error(err));
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else {
+        alert("Tu navegador no soporta pantalla completa.");
+      }
+    } else {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      }
     }
   };
   
@@ -47,11 +89,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     icon?: React.ReactNode,
     disabled: boolean = false
   ) => (
-    <div className={`mb-5 transition-all duration-500 ${disabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-      <div className="flex justify-between items-end mb-2">
-        <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 font-semibold">
-          {icon && <span className="text-cyan-300 drop-shadow-[0_0_5px_rgba(0,242,254,0.8)]">{icon}</span>}
-          {label}
+    <div className={`mb-3 transition-all duration-500 ${disabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+      <div className="flex justify-between items-center mb-1.5 gap-2">
+        <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 flex items-center gap-1 sm:gap-2 font-semibold truncate flex-1">
+          {icon && <span className="text-cyan-300 drop-shadow-[0_0_5px_rgba(0,242,254,0.8)] shrink-0">{icon}</span>}
+          <span className="truncate">{label}</span>
         </label>
         <input
           type="number"
@@ -59,7 +101,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           value={typeof params[key] === 'number' ? Number(params[key]).toFixed(3) : params[key] as number}
           onChange={(e) => handleChange(key, parseFloat(e.target.value))}
           disabled={disabled}
-          className="font-mono text-xs text-cyan-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-cyan-400 outline-none text-right w-20 hover:border-white/30 transition-all shadow-inner"
+          className="font-mono text-xs text-cyan-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-cyan-400 outline-none text-right w-16 sm:w-20 hover:border-white/30 transition-all shadow-inner shrink-0"
         />
       </div>
       <input
@@ -84,10 +126,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   ) => {
     const value = params.sgSettings[selectedSgEditMode][key];
     return (
-      <div className="mb-5 transition-all duration-500 opacity-100">
-        <div className="flex justify-between items-end mb-2">
-          <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 font-semibold">
-            {label}
+      <div className="mb-3 transition-all duration-500 opacity-100">
+        <div className="flex justify-between items-center mb-1.5 gap-2">
+          <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 flex items-center gap-1 sm:gap-2 font-semibold truncate flex-1">
+            <span className="truncate">{label}</span>
           </label>
           <input
             type="number"
@@ -107,7 +149,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 }
               }));
             }}
-            className="font-mono text-xs text-emerald-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-emerald-400 outline-none text-right w-20 hover:border-white/30 transition-all shadow-inner"
+            className="font-mono text-xs text-emerald-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-emerald-400 outline-none text-right w-16 sm:w-20 hover:border-white/30 transition-all shadow-inner shrink-0"
           />
         </div>
         <input
@@ -137,9 +179,29 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
   return (
     <>
+      <svg width="0" height="0" className="absolute">
+        <defs>
+          <linearGradient id="neon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00f2fe" />
+            <stop offset="100%" stopColor="#4facfe" />
+          </linearGradient>
+          <linearGradient id="emerald-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#0ba360" />
+            <stop offset="100%" stopColor="#3cba92" />
+          </linearGradient>
+          <linearGradient id="pink-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ff0844" />
+            <stop offset="100%" stopColor="#ffb199" />
+          </linearGradient>
+          <linearGradient id="indigo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="100%" stopColor="#c084fc" />
+          </linearGradient>
+        </defs>
+      </svg>
       <style>{`
         .liquid-panel {
-          background: rgba(15, 15, 25, 0.4);
+          background: rgba(15, 15, 25, ${params.menuTransparency});
           backdrop-filter: blur(40px) saturate(200%);
           -webkit-backdrop-filter: blur(40px) saturate(200%);
           border: 1px solid rgba(255, 255, 255, 0.15);
@@ -148,20 +210,27 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
             inset 0 1px 2px rgba(255, 255, 255, 0.4),
             inset 0 -10px 30px rgba(255, 255, 255, 0.05),
             inset 0 20px 40px rgba(255, 255, 255, 0.03);
-          border-radius: 40px;
+          border-radius: 24px;
           overflow: hidden;
+        }
+        @media (min-width: 768px) {
+          .liquid-panel {
+            border-radius: 40px;
+          }
         }
 
         .liquid-bubble {
-          background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.02) 100%);
-          backdrop-filter: blur(15px);
+          background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+          backdrop-filter: blur(16px) saturate(150%);
           border: 1px solid rgba(255, 255, 255, 0.2);
+          border-top: 1px solid rgba(255, 255, 255, 0.4);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.2);
           box-shadow: 
             0 8px 32px 0 rgba(0, 0, 0, 0.3),
-            inset 0 2px 3px rgba(255, 255, 255, 0.3),
-            inset 0 -2px 5px rgba(0, 0, 0, 0.3);
+            inset 0 2px 4px rgba(255, 255, 255, 0.3),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.2);
           border-radius: 9999px;
-          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
           position: relative;
           overflow: hidden;
         }
@@ -169,26 +238,50 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         .liquid-bubble::before {
           content: '';
           position: absolute;
-          top: 2%; left: 15%; right: 15%; height: 35%;
-          background: linear-gradient(to bottom, rgba(255,255,255,0.5), transparent);
+          top: 5%; left: 10%; right: 10%; height: 40%;
+          background: linear-gradient(to bottom, rgba(255,255,255,0.6), transparent);
           border-radius: 50%;
           pointer-events: none;
+          filter: blur(2px);
         }
 
         .liquid-bubble:hover {
-          transform: translateY(-3px) scale(1.03);
+          transform: translateY(-2px);
+          background: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+          border-top: 1px solid rgba(255, 255, 255, 0.5);
           box-shadow: 
-            0 15px 40px 0 rgba(0, 0, 0, 0.4),
-            inset 0 2px 4px rgba(255, 255, 255, 0.5),
-            0 0 25px rgba(0, 242, 254, 0.4);
-          background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%);
+            0 12px 40px 0 rgba(0, 0, 0, 0.4),
+            inset 0 2px 4px rgba(255, 255, 255, 0.4),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .liquid-bubble:active {
-          transform: translateY(1px) scale(0.97);
+          transform: translateY(1px);
           box-shadow: 
-            0 4px 15px 0 rgba(0, 0, 0, 0.3),
-            inset 0 4px 8px rgba(0, 0, 0, 0.5);
+            0 4px 16px 0 rgba(0, 0, 0, 0.3),
+            inset 0 2px 4px rgba(255, 255, 255, 0.1),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-neon {
+          filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.8)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+          stroke: url(#neon-gradient);
+          stroke-width: 2.5;
+        }
+        .icon-neon-emerald {
+          filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+          stroke: url(#emerald-gradient);
+          stroke-width: 2.5;
+        }
+        .icon-neon-pink {
+          filter: drop-shadow(0 0 8px rgba(255, 8, 68, 0.8)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+          stroke: url(#pink-gradient);
+          stroke-width: 2.5;
+        }
+        .icon-neon-indigo {
+          filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+          stroke: url(#indigo-gradient);
+          stroke-width: 2.5;
         }
 
         .liquid-slider {
@@ -207,19 +300,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           appearance: none;
           width: 26px;
           height: 26px;
-          border-radius: 50%;
+          border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
           background: radial-gradient(circle at 30% 30%, rgba(255,255,255,1), rgba(100,200,255,0.8));
           box-shadow: 
             0 4px 12px rgba(0,0,0,0.5), 
             inset 0 2px 5px rgba(255,255,255,1),
             inset 0 -2px 5px rgba(0,0,0,0.3);
           cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
           border: 1px solid rgba(255,255,255,0.6);
         }
 
         .liquid-slider::-webkit-slider-thumb:hover {
           transform: scale(1.25);
+          border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%;
           box-shadow: 
             0 8px 20px rgba(0,242,254,0.6), 
             inset 0 2px 5px rgba(255,255,255,1);
@@ -263,6 +357,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           cursor: pointer;
           border: 1px solid rgba(255,255,255,0.15);
           transition: all 0.4s ease;
+          overflow: hidden;
+        }
+
+        .liquid-switch::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+          pointer-events: none;
         }
 
         .liquid-switch-thumb {
@@ -271,19 +374,21 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           left: 2px;
           width: 24px;
           height: 24px;
-          border-radius: 50%;
+          border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
           background: radial-gradient(circle at 30% 30%, rgba(255,255,255,1), rgba(200,200,200,0.6));
           box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 2px 3px rgba(255,255,255,1);
-          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         .liquid-switch.active {
           background: rgba(0, 242, 254, 0.25);
           border-color: rgba(0, 242, 254, 0.5);
+          box-shadow: inset 0 2px 8px rgba(0,242,254,0.3), 0 0 15px rgba(0,242,254,0.2);
         }
 
         .liquid-switch.active .liquid-switch-thumb {
           left: 28px;
+          border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%;
           background: radial-gradient(circle at 30% 30%, #fff, #00f2fe);
           box-shadow: 0 0 20px #00f2fe, inset 0 2px 3px rgba(255,255,255,1);
         }
@@ -291,9 +396,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         .liquid-switch.active-emerald {
           background: rgba(16, 185, 129, 0.25);
           border-color: rgba(16, 185, 129, 0.5);
+          box-shadow: inset 0 2px 8px rgba(16,185,129,0.3), 0 0 15px rgba(16,185,129,0.2);
         }
         .liquid-switch.active-emerald .liquid-switch-thumb {
           left: 28px;
+          border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%;
           background: radial-gradient(circle at 30% 30%, #fff, #10b981);
           box-shadow: 0 0 20px #10b981, inset 0 2px 3px rgba(255,255,255,1);
         }
@@ -301,21 +408,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         .liquid-switch.active-purple {
           background: rgba(168, 85, 247, 0.25);
           border-color: rgba(168, 85, 247, 0.5);
+          box-shadow: inset 0 2px 8px rgba(168,85,247,0.3), 0 0 15px rgba(168,85,247,0.2);
         }
         .liquid-switch.active-purple .liquid-switch-thumb {
           left: 28px;
+          border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%;
           background: radial-gradient(circle at 30% 30%, #fff, #a855f7);
           box-shadow: 0 0 20px #a855f7, inset 0 2px 3px rgba(255,255,255,1);
+        }
+
+        .liquid-switch.active-pink {
+          background: rgba(236, 72, 153, 0.25);
+          border-color: rgba(236, 72, 153, 0.5);
+          box-shadow: inset 0 2px 8px rgba(236,72,153,0.3), 0 0 15px rgba(236,72,153,0.2);
+        }
+        .liquid-switch.active-pink .liquid-switch-thumb {
+          left: 28px;
+          border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%;
+          background: radial-gradient(circle at 30% 30%, #fff, #ec4899);
+          box-shadow: 0 0 20px #ec4899, inset 0 2px 3px rgba(255,255,255,1);
         }
 
         .liquid-section {
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 32px;
+          border-radius: 20px;
           box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.03), 0 15px 35px rgba(0,0,0,0.3);
           position: relative;
           overflow: hidden;
-          padding: 1.5rem;
+          padding: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        @media (min-width: 768px) {
+          .liquid-section {
+            border-radius: 24px;
+            padding: 1rem;
+          }
         }
 
         .liquid-section::before {
@@ -344,54 +472,65 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         }
       `}</style>
 
-      <div className="liquid-panel w-full h-full flex flex-col relative z-10">
-        <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-          <div>
-            <h1 className="text-3xl font-bold neon-text flex items-center gap-3">
-              <Activity className="w-8 h-8 text-cyan-300 drop-shadow-[0_0_10px_rgba(0,242,254,0.8)]" />
+      <div className="liquid-panel w-full h-full flex-1 flex flex-col relative z-10">
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-white/10 flex flex-col md:flex-row justify-between items-center bg-white/5 gap-3 md:gap-0 shrink-0">
+          <div className="text-center md:text-left">
+            <h1 className="text-xl md:text-2xl font-bold neon-text flex items-center justify-center md:justify-start gap-2">
+              <Activity className="w-5 h-5 md:w-6 md:h-6 icon-neon" />
               AudioMorphic
             </h1>
-            <p className="text-sm text-cyan-100/70 mt-1 font-medium tracking-wide">Recurrencia Compleja Sonora</p>
+            <p className="text-[10px] md:text-xs text-cyan-100/70 mt-0.5 font-medium tracking-wide">Recurrencia Compleja Sonora</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap justify-center gap-3">
             <button
               onClick={toggleAudio}
-              className={`liquid-bubble px-6 py-3 font-bold flex items-center gap-2 ${
+              className={`liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 ${
                 audioActive ? 'text-red-300 shadow-[0_0_20px_rgba(239,68,68,0.4)]' : 'text-cyan-300'
               }`}
             >
-              {audioActive ? 'Detener Micrófono' : 'Iniciar Micrófono'}
+              <span className="hidden sm:inline">{audioActive ? 'Detener Micrófono' : 'Iniciar Micrófono'}</span>
+              <span className="sm:hidden">{audioActive ? 'Detener' : 'Iniciar'}</span>
             </button>
             <button
               onClick={toggleFullScreen}
-              className="liquid-bubble px-6 py-3 font-bold flex items-center gap-2 text-purple-300"
+              className="liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-purple-300"
             >
-              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-              {isFullscreen ? 'Salir' : 'Pantalla Completa'}
+              {isFullscreen ? <Minimize className="w-5 h-5 icon-neon" /> : <Maximize className="w-5 h-5 icon-neon" />}
+              <span className="hidden sm:inline">{isFullscreen ? 'Salir' : 'Pantalla Completa'}</span>
             </button>
             <button
               onClick={handleInstallClick}
-              className="liquid-bubble px-6 py-3 font-bold flex items-center gap-2 text-emerald-300"
+              className="liquid-bubble px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-emerald-300"
             >
-              <Download className="w-5 h-5" />
-              Instalar
+              <Download className="w-5 h-5 icon-neon" />
+              <span className="hidden sm:inline">Instalar</span>
             </button>
+            
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="liquid-bubble px-3 py-2 md:py-3 text-sm md:text-base font-bold flex items-center gap-2 text-red-400 ml-auto"
+                title="Cerrar Menú"
+              >
+                <X className="w-5 h-5 icon-neon" />
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="p-8 overflow-y-auto flex-1 liquid-scroll">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="p-2 md:p-4 overflow-y-auto flex-1 min-h-0 liquid-scroll">
+          <div className="columns-1 lg:columns-2 gap-2 md:gap-4">
             
             {/* Auto Pilot Section */}
-            <div className="liquid-section">
-               <div className="flex justify-between items-center mb-6">
+            <div className="liquid-section break-inside-avoid">
+               <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-bold neon-text flex items-center gap-2">
-                  <BrainCircuit className="w-5 h-5" /> 
+                  <BrainCircuit className="w-5 h-5 icon-neon-indigo" /> 
                   Piloto Automático
                 </h3>
                 <div 
                    onClick={() => handleChange('autoPilot', !params.autoPilot)}
-                   className={`liquid-switch ${params.autoPilot ? 'active' : ''}`}
+                   className={`liquid-switch shrink-0 ${params.autoPilot ? 'active' : ''}`}
                  >
                    <div className="liquid-switch-thumb"></div>
                  </div>
@@ -401,7 +540,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   <div className="animate-in fade-in slide-in-from-top-4 duration-700">
                       
                       {/* Mode Selector */}
-                      <div className="flex bg-black/40 p-1.5 rounded-2xl mb-6 border border-white/10 shadow-inner">
+                      <div className="flex flex-col sm:flex-row bg-black/40 p-1.5 rounded-2xl mb-4 border border-white/10 shadow-inner gap-1 sm:gap-0">
                         <button
                           onClick={() => handleChange('autoPilotMode', 'drift')}
                           className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs uppercase font-bold rounded-xl transition-all ${
@@ -410,7 +549,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                               : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                           }`}
                         >
-                          <Shuffle size={14} /> Deriva
+                          <Shuffle size={14} className="icon-neon" /> Deriva
                         </button>
                         <button
                           onClick={() => handleChange('autoPilotMode', 'harmonic')}
@@ -420,12 +559,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                               : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                           }`}
                         >
-                          <Waves size={14} /> Armónico
+                          <Waves size={14} className="icon-neon" /> Armónico
                         </button>
                         <button
                           onClick={() => {
                             handleChange('autoPilotMode', 'genesis');
-                            handleChange('sgResonanceModes', ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus']);
+                            handleChange('spiralResonanceModes', ['flowerOfLife', 'torus']);
+                            handleChange('sacredGeometryEnabled', true);
+                            handleChange('sacredGeometryModes', ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus']);
                           }}
                           className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs uppercase font-bold rounded-xl transition-all ${
                             params.autoPilotMode === 'genesis' 
@@ -433,14 +574,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                               : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
                           }`}
                         >
-                          <Sprout size={14} /> Génesis
+                          <Sprout size={14} className="icon-neon-emerald" /> Génesis
                         </button>
                       </div>
 
                       {/* Genesis/Math Display Info */}
                       {(params.autoPilotMode === 'genesis' || params.autoPilotMode === 'harmonic') && params.geometryData && (
-                         <div className="mb-6 text-center p-4 bg-black/30 rounded-2xl border border-white/10 shadow-inner space-y-3">
-                            <div className="border-b border-white/10 pb-3">
+                         <div className="mb-4 text-center p-3 bg-black/30 rounded-2xl border border-white/10 shadow-inner space-y-2">
+                            <div className="border-b border-white/10 pb-2">
                               <span className="text-xs text-gray-400 uppercase tracking-widest block mb-1">Geometría Activa</span>
                               <span className="text-lg font-serif text-white font-bold block drop-shadow-md">{params.geometryData.name}</span>
                               <span className={`text-xs uppercase font-bold tracking-wider px-3 py-1 rounded-full inline-block mt-2 shadow-sm ${
@@ -466,63 +607,111 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                          </div>
                       )}
 
-                      {renderControl("Viscosidad", "autoViscosity", 0.01, 0.999, 0.001, <Droplets className="w-4 h-4"/>)}
-                      {params.autoPilotMode === 'drift' && renderControl("Velocidad Deriva", "autoSpeed", 0.01, 1.0, 0.01, <Wind className="w-4 h-4"/>)}
+                      {renderControl("Viscosidad", "autoViscosity", 0.01, 0.999, 0.001, <Droplets className="w-4 h-4 icon-neon"/>)}
+                      {params.autoPilotMode === 'drift' && renderControl("Velocidad Deriva", "autoSpeed", 0.01, 1.0, 0.01, <Wind className="w-4 h-4 icon-neon"/>)}
                   </div>
                )}
             </div>
 
+            {/* Perturbación de Espiral Section */}
+            <div className="liquid-section break-inside-avoid border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)]">
+              <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2 mb-4">
+                <Waves className="w-5 h-5 icon-neon-emerald" /> Perturbación de Espiral
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                {[
+                  { id: 'goldenSpiral', label: 'Espiral Áurea' },
+                  { id: 'flowerOfLife', label: 'Flor de la Vida' },
+                  { id: 'quantumWave', label: 'Onda Cuántica' },
+                  { id: 'torus', label: 'Toroide' }
+                ].map(mode => {
+                  const isActive = params.spiralResonanceModes?.includes(mode.id as any);
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={() => {
+                        const currentModes = params.spiralResonanceModes || [];
+                        let newModes;
+                        if (isActive) {
+                          newModes = currentModes.filter(m => m !== mode.id);
+                        } else {
+                          newModes = [...currentModes, mode.id];
+                        }
+                        handleChange('spiralResonanceModes', newModes);
+                      }}
+                      className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
+                        isActive 
+                          ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Sacred Geometry Section */}
-            {params.autoPilot && params.autoPilotMode === 'genesis' && (
-              <div className="liquid-section border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)]">
-                <h3 className="text-lg font-bold neon-text-emerald mb-6 flex items-center gap-2">
-                  <Sprout className="w-5 h-5" /> Geometría Sagrada
+            <div className={`liquid-section break-inside-avoid border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)] transition-all duration-500`}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2">
+                  <Sprout className="w-5 h-5 icon-neon-emerald" /> Geometría Sagrada
                 </h3>
-                
-                <div className="mb-6">
-                  <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
-                    Estilos de Resonancia
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
-                    {[
-                      { id: 'goldenSpiral', label: 'Espiral Áurea' },
-                      { id: 'flowerOfLife', label: 'Flor de la Vida' },
-                      { id: 'quantumWave', label: 'Onda Cuántica' },
-                      { id: 'torus', label: 'Toroide' }
-                    ].map(mode => {
-                      const isActive = params.sgResonanceModes?.includes(mode.id as any);
-                      return (
-                        <button
-                          key={mode.id}
-                          onClick={() => {
-                            const currentModes = params.sgResonanceModes || [];
-                            let newModes;
-                            if (isActive) {
-                              newModes = currentModes.filter(m => m !== mode.id);
-                              if (newModes.length === 0) newModes = [mode.id];
-                            } else {
-                              newModes = [...currentModes, mode.id];
-                            }
-                            handleChange('sgResonanceModes', newModes);
-                          }}
-                          className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
-                            isActive 
-                              ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                              : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                          }`}
-                        >
-                          {mode.label}
-                        </button>
-                      );
-                    })}
+                <div 
+                   onClick={() => handleChange('sacredGeometryEnabled', !params.sacredGeometryEnabled)}
+                   className={`liquid-switch shrink-0 ${params.sacredGeometryEnabled ? 'active' : ''}`}
+                 >
+                   <div className="liquid-switch-thumb"></div>
+                 </div>
+              </div>
+
+              {params.sacredGeometryEnabled && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+                  <div className="mb-4">
+                    <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
+                      Tipos de Geometría
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                      {[
+                        { id: 'goldenSpiral', label: 'Espiral Áurea' },
+                        { id: 'flowerOfLife', label: 'Flor de la Vida' },
+                        { id: 'quantumWave', label: 'Onda Cuántica' },
+                        { id: 'torus', label: 'Toroide' }
+                      ].map(mode => {
+                        const isActive = params.sacredGeometryModes?.includes(mode.id as any);
+                        return (
+                          <button
+                            key={mode.id}
+                            onClick={() => {
+                              const currentModes = params.sacredGeometryModes || [];
+                              let newModes;
+                              if (isActive) {
+                                newModes = currentModes.filter(m => m !== mode.id);
+                                if (newModes.length === 0) newModes = [mode.id];
+                              } else {
+                                newModes = [...currentModes, mode.id];
+                              }
+                              handleChange('sacredGeometryModes', newModes);
+                            }}
+                            className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
+                              isActive 
+                                ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                            }`}
+                          >
+                            {mode.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
                 <div className="mb-6">
                   <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
                     Modo de Dibujo
                   </label>
-                  <div className="grid grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
                     <button
                       onClick={() => handleChange('sgDrawMode', 'layers')}
                       className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
@@ -547,26 +736,26 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 </div>
 
                 {params.sgDrawMode === 'nodes' && (
-                  <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                     <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">
+                  <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                     <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
                         Mostrar Nodos Emanantes
                      </label>
                      <div 
                        onClick={() => handleChange('sgShowNodes', !params.sgShowNodes)}
-                       className={`liquid-switch ${params.sgShowNodes ? 'active-emerald' : ''}`}
+                       className={`liquid-switch shrink-0 ${params.sgShowNodes ? 'active-emerald' : ''}`}
                      >
                        <div className="liquid-switch-thumb"></div>
                      </div>
                   </div>
                 )}
 
-                <div className="mb-6 flex justify-between items-center bg-emerald-900/20 p-3 rounded-2xl border border-emerald-500/30">
-                   <label className="text-xs uppercase tracking-wider text-emerald-300 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">
+                <div className="mb-4 flex justify-between items-center bg-emerald-900/20 p-3 rounded-2xl border border-emerald-500/30 gap-2">
+                   <label className="text-[10px] sm:text-xs uppercase tracking-wider text-emerald-300 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)] truncate flex-1">
                       Resonancia Automática
                    </label>
                    <div 
                      onClick={() => handleChange('sgAutoResonance', !params.sgAutoResonance)}
-                     className={`liquid-switch ${params.sgAutoResonance ? 'active-emerald' : ''}`}
+                     className={`liquid-switch shrink-0 ${params.sgAutoResonance ? 'active-emerald' : ''}`}
                    >
                      <div className="liquid-switch-thumb"></div>
                    </div>
@@ -578,7 +767,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                       <label className="text-xs uppercase tracking-wider text-emerald-400 flex items-center gap-2 mb-3 font-semibold">
                         Ajustes Independientes
                       </label>
-                      <div className="grid grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 mb-6 shadow-inner">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 mb-4 shadow-inner">
                         {[
                           { id: 'goldenSpiral', label: 'Espiral Áurea' },
                           { id: 'flowerOfLife', label: 'Flor de la Vida' },
@@ -618,15 +807,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 )}
               </div>
             )}
+          </div>
 
-            {/* VR Section */}
-            <div className="liquid-section border-purple-500/30 shadow-[inset_0_0_30px_rgba(168,85,247,0.05)]">
-              <h3 className="text-lg font-bold neon-text text-purple-400 mb-6 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
-                <Glasses className="w-5 h-5" /> Realidad Virtual
+          {/* VR Section */}
+            <div className="liquid-section break-inside-avoid border-purple-500/30 shadow-[inset_0_0_30px_rgba(168,85,247,0.05)]">
+              <h3 className="text-lg font-bold neon-text text-purple-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
+                <Glasses className="w-5 h-5 icon-neon-pink" /> Realidad Virtual
               </h3>
               
-              <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                 <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">
+              <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                 <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
                     Modo VR 3D
                  </label>
                  <div 
@@ -647,7 +837,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                        handleChange('vrMode', false);
                      }
                    }}
-                   className={`liquid-switch ${params.vrMode ? 'active-purple' : ''}`}
+                   className={`liquid-switch shrink-0 ${params.vrMode ? 'active-purple' : ''}`}
                  >
                    <div className="liquid-switch-thumb"></div>
                  </div>
@@ -655,20 +845,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
               {params.vrMode && (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-                  <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                     <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">
+                  <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                     <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
                         Modo AR (Cámara)
                      </label>
                      <div 
                        onClick={() => handleChange('arMode', !params.arMode)}
-                       className={`liquid-switch ${params.arMode ? 'active-emerald' : ''}`}
+                       className={`liquid-switch shrink-0 ${params.arMode ? 'active-emerald' : ''}`}
                      >
                        <div className="liquid-switch-thumb"></div>
                      </div>
                   </div>
 
                   {params.arMode && (
-                    <div className="mb-6 bg-black/20 p-4 rounded-2xl border border-white/5">
+                    <div className="mb-4 bg-black/20 p-4 rounded-2xl border border-white/5">
                       <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
                         Filtro AR
                       </label>
@@ -691,18 +881,18 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                     </div>
                   )}
 
-                  <div className="space-y-4 mb-6">
-                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                       <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">Rotación Manual</label>
-                       <div onClick={() => handleChange('vrDragRotation', !params.vrDragRotation)} className={`liquid-switch ${params.vrDragRotation ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
+                  <div className="space-y-4 mb-4">
+                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                       <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Rotación Manual</label>
+                       <div onClick={() => handleChange('vrDragRotation', !params.vrDragRotation)} className={`liquid-switch shrink-0 ${params.vrDragRotation ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
                     </div>
-                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                       <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">Pantalla Dividida</label>
-                       <div onClick={() => handleChange('vrSplitScreen', !params.vrSplitScreen)} className={`liquid-switch ${params.vrSplitScreen ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
+                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                       <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Pantalla Dividida</label>
+                       <div onClick={() => handleChange('vrSplitScreen', !params.vrSplitScreen)} className={`liquid-switch shrink-0 ${params.vrSplitScreen ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
                     </div>
-                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                       <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">Portal Infinito</label>
-                       <div onClick={() => handleChange('vrSymmetric', !params.vrSymmetric)} className={`liquid-switch ${params.vrSymmetric ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
+                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                       <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Portal Infinito</label>
+                       <div onClick={() => handleChange('vrSymmetric', !params.vrSymmetric)} className={`liquid-switch shrink-0 ${params.vrSymmetric ? 'active-purple' : ''}`}><div className="liquid-switch-thumb"></div></div>
                     </div>
                   </div>
                   
@@ -714,21 +904,52 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               )}
             </div>
 
+            {/* AR Portal Section */}
+            <div className="liquid-section break-inside-avoid border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)]">
+              <h3 className="text-lg font-bold neon-text text-emerald-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)'}}>
+                <Glasses className="w-5 h-5 icon-neon-pink" /> Portal AR
+              </h3>
+              
+              <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
+                 <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
+                    Modo Portal Inteligente
+                 </label>
+                 <div 
+                   onClick={() => handleChange('arPortalMode', !params.arPortalMode)}
+                   className={`liquid-switch shrink-0 ${params.arPortalMode ? 'active-emerald' : ''}`}
+                 >
+                   <div className="liquid-switch-thumb"></div>
+                 </div>
+              </div>
+
+              {params.arPortalMode && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+                  {renderControl("Escala del Portal", "arPortalScale", 0.1, 20.0, 0.1)}
+                  {renderControl("Intensidad Perspectiva", "arPortalPerspectiveIntensity", 0.0, 5.0, 0.1)}
+                  {renderControl("Amplitud Punto de Fuga", "arPortalVanishingRadius", 0.0, 10.0, 0.1)}
+                  {renderControl("Difuminado de Profundidad", "arPortalFade", 0.0, 5.0, 0.01)}
+                  {renderControl("Doblado del Portal", "arPortalBending", 0.0, 1.0, 0.01)}
+                </div>
+              )}
+            </div>
+
             {/* Interface & Reactivity */}
-            <div className="space-y-8">
+            <div className="break-inside-avoid">
               <div className="liquid-section">
                 <h3 className="text-lg font-bold neon-text text-yellow-400 mb-6 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #fde047 0%, #eab308 100%)'}}>
-                  <Zap className="w-5 h-5" /> Interfaz
+                  <Zap className="w-5 h-5 icon-neon" /> Interfaz
                 </h3>
-                <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5">
-                   <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">Mostrar Indicadores</label>
-                   <div onClick={() => handleChange('showIndicators', !params.showIndicators)} className={`liquid-switch ${params.showIndicators ? 'active' : ''}`}><div className="liquid-switch-thumb"></div></div>
+                <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2 mb-4">
+                   <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Mostrar Indicadores</label>
+                   <div onClick={() => handleChange('showIndicators', !params.showIndicators)} className={`liquid-switch shrink-0 ${params.showIndicators ? 'active' : ''}`}><div className="liquid-switch-thumb"></div></div>
                 </div>
+                {renderControl("Transparencia Menú", "menuTransparency", 0.0, 1.0, 0.05)}
+                {renderControl("Cierre Automático (s)", "menuAutoCloseTime", 1, 60, 1)}
               </div>
 
               <div className="liquid-section">
                 <h3 className="text-lg font-bold neon-text text-yellow-400 mb-6 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #fde047 0%, #eab308 100%)'}}>
-                  <Zap className="w-5 h-5" /> Reactividad
+                  <Zap className="w-5 h-5 icon-neon" /> Reactividad
                 </h3>
                 {renderControl("Sensibilidad", "sensitivity", 0.1, 5.0, 0.1)}
                 {renderControl("Espectro Freq", "freqRange", 0.1, 1.0, 0.05)}
@@ -737,17 +958,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
             </div>
 
             {/* Colors */}
-            <div className="liquid-section border-pink-500/30 shadow-[inset_0_0_30px_rgba(236,72,153,0.05)]">
-              <h3 className="text-lg font-bold neon-text-pink mb-6 flex items-center gap-2">
-                <Palette className="w-5 h-5" /> Cromatismo
+            <div className="liquid-section break-inside-avoid border-pink-500/30 shadow-[inset_0_0_30px_rgba(236,72,153,0.05)]">
+              <h3 className="text-lg font-bold neon-text-pink mb-4 flex items-center gap-2">
+                <Palette className="w-5 h-5 icon-neon-pink" /> Cromatismo
               </h3>
               
-              <div className="mb-6 flex justify-between items-center bg-pink-900/20 p-3 rounded-2xl border border-pink-500/30">
-                 <label className="text-xs uppercase tracking-wider text-pink-300 font-bold flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)]">
-                    <Music className="w-4 h-4" /> Color Armónico
+              <div className="mb-4 flex justify-between items-center bg-pink-900/20 p-3 rounded-2xl border border-pink-500/30 gap-2">
+                 <label className="text-[10px] sm:text-xs uppercase tracking-wider text-pink-300 font-bold flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)] truncate flex-1">
+                    <Music className="w-4 h-4 shrink-0 icon-neon-pink" /> <span className="truncate">Color Armónico</span>
                  </label>
-                 <div onClick={() => handleChange('harmonicColor', !params.harmonicColor)} className={`liquid-switch ${params.harmonicColor ? 'active-pink' : ''}`} style={params.harmonicColor ? {background: 'rgba(236,72,153,0.25)', borderColor: 'rgba(236,72,153,0.5)'} : {}}>
-                   <div className="liquid-switch-thumb" style={params.harmonicColor ? {background: 'radial-gradient(circle at 30% 30%, #fff, #ec4899)', boxShadow: '0 0 20px #ec4899, inset 0 2px 3px rgba(255,255,255,1)', left: '28px'} : {}}></div>
+                 <div onClick={() => handleChange('harmonicColor', !params.harmonicColor)} className={`liquid-switch shrink-0 ${params.harmonicColor ? 'active-pink' : ''}`}>
+                   <div className="liquid-switch-thumb"></div>
                  </div>
               </div>
 
@@ -771,27 +992,28 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
             </div>
 
             {/* Base Geometry */}
-            <div className="liquid-section">
-              <h3 className="text-lg font-bold neon-text text-purple-400 mb-6 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
-                <Maximize className="w-5 h-5" /> Geometría Base
+            <div className="liquid-section break-inside-avoid">
+              <h3 className="text-lg font-bold neon-text text-purple-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
+                <Maximize className="w-5 h-5 icon-neon" /> Geometría Base
               </h3>
               {renderControl("Factor K (Expansión)", "k", 0.8, 1.2, 0.001, undefined, params.autoPilot)}
               {renderControl("Detalle (Iteraciones)", "iter", 100, 2000, 10, undefined, false)}
               {renderControl("Profundidad (Zoom)", "zoom", 0.001, 3.0, 0.001, undefined, false)}
+              {renderControl("Distancia (Zoom)", "distanceZoom", 0.1, 5.0, 0.01, undefined, false)}
             </div>
 
             {/* Transformation */}
-            <div className="liquid-section">
-              <div className="flex justify-between items-center mb-6">
+            <div className="liquid-section break-inside-avoid">
+              <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-bold neon-text text-green-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)'}}>
-                  <RotateCw className="w-5 h-5" /> Transformación
+                  <RotateCw className="w-5 h-5 icon-neon" /> Transformación
                 </h3>
                 <button 
                   onClick={centerSpiral}
                   disabled={params.autoPilot}
                   className={`liquid-bubble px-3 py-2 text-xs uppercase font-bold text-cyan-300 flex items-center gap-1 ${params.autoPilot ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <Target size={14} /> CENTRAR
+                  <Target size={14} className="icon-neon" /> CENTRAR
                 </button>
               </div>
               
