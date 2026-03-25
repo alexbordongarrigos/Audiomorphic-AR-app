@@ -38,7 +38,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
   const [showPresetModal, setShowPresetModal] = useState(false);
-  const [showRandomizerMenu, setShowRandomizerMenu] = useState(false);
   const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart' | 'dj'>('none');
   const [autoRandomInterval, setAutoRandomInterval] = useState<number>(10);
   const [autoRandomOnEmotionChange, setAutoRandomOnEmotionChange] = useState<boolean>(false);
@@ -1104,13 +1103,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           </div>
           <div className="flex flex-wrap justify-center items-center gap-2 md:gap-3 w-full md:w-auto">
             <button
-              onClick={() => setShowRandomizerMenu(true)}
-              className={`liquid-bubble p-2 md:p-3 ${autoRandomMode !== 'none' ? 'text-green-400' : 'text-cyan-400'} hover:text-cyan-300`}
-              title="Menú de Aleatorización"
-            >
-              <Shuffle size={20} className="icon-neon" />
-            </button>
-            <button
               onClick={() => setParams(DEFAULT_PARAMS)}
               className="liquid-bubble p-2 md:p-3 text-red-400 hover:text-red-300"
               title="Restaurar Valores por Defecto"
@@ -1177,6 +1169,133 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         <div className="p-2 md:p-4 overflow-y-auto flex-1 min-h-0 liquid-scroll">
           <div className="columns-1 lg:columns-2 gap-2 md:gap-4">
             
+            {/* Modos de ajustes aleatorios Section */}
+            <div className="liquid-section break-inside-avoid">
+               <div className="flex justify-between items-center mb-4">
+                 <h3 className="text-lg font-bold neon-text flex items-center gap-2">
+                  <Shuffle className="w-5 h-5 icon-neon" /> 
+                  Modos de ajustes aleatorios
+                </h3>
+               </div>
+               
+               <div className="space-y-6">
+                 <div className="grid grid-cols-3 gap-2">
+                   <button
+                     onClick={() => generateRandomParams('random', false)}
+                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-cyan-300 hover:text-cyan-200"
+                   >
+                     <Shuffle size={20} />
+                     <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Total</span>
+                   </button>
+                   <button
+                     onClick={() => generateRandomParams('smart', false)}
+                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-emerald-300 hover:text-emerald-200"
+                   >
+                     <BrainCircuit size={20} />
+                     <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Inteligente</span>
+                   </button>
+                   <button
+                     onClick={() => generateRandomParams('dj', false)}
+                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-purple-400 hover:text-purple-300"
+                   >
+                     <Music size={20} />
+                     <span className="text-xs font-semibold text-center leading-tight">Modo<br/>DJ</span>
+                   </button>
+                 </div>
+
+                 <div className="bg-black/30 p-4 rounded-2xl border border-white/10">
+                   <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                     <Activity size={16} className="text-purple-400" />
+                     Auto-Regeneración
+                   </h3>
+                   
+                   <div className="space-y-4">
+                     <div className="flex items-center justify-between">
+                       <label className="text-xs text-gray-300">Modo Automático</label>
+                       <select
+                         value={autoRandomMode}
+                         onChange={(e) => handleAutoRandomModeChange(e.target.value as any)}
+                         className="bg-black/50 border border-white/10 text-cyan-300 text-xs rounded-lg p-2 outline-none"
+                       >
+                         <option value="none">Apagado</option>
+                         <option value="random">Aleatorio Total</option>
+                         <option value="smart">Aleatorio Inteligente</option>
+                         <option value="dj">Modo DJ</option>
+                       </select>
+                     </div>
+
+                     {autoRandomMode !== 'none' && (
+                       <>
+                         <div className="flex items-center justify-between">
+                           <label className="text-xs text-gray-300">Detección de Emoción/Estilo</label>
+                           <input
+                             type="checkbox"
+                             checked={autoRandomOnEmotionChange}
+                             onChange={(e) => setAutoRandomOnEmotionChange(e.target.checked)}
+                             className="w-4 h-4 accent-cyan-500"
+                           />
+                         </div>
+
+                         {autoRandomOnEmotionChange && (
+                           <div className="space-y-4 mt-4">
+                             <div className="flex flex-col items-center">
+                               <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                                 <span>Sensibilidad a Emoción</span>
+                                 <span className="text-cyan-400">{autoEmotionSensitivity}%</span>
+                               </label>
+                               <input
+                                 type="range"
+                                 min="0"
+                                 max="100"
+                                 step="1"
+                                 value={autoEmotionSensitivity}
+                                 onChange={(e) => setAutoEmotionSensitivity(Number(e.target.value))}
+                                 className="w-full accent-cyan-500"
+                               />
+                             </div>
+                             
+                             <div className="flex flex-col items-center">
+                               <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                                 <span>Fluidez de Estilo</span>
+                                 <span className="text-cyan-400">{autoStyleFluidity}%</span>
+                               </label>
+                               <input
+                                 type="range"
+                                 min="0"
+                                 max="100"
+                                 step="1"
+                                 value={autoStyleFluidity}
+                                 onChange={(e) => setAutoStyleFluidity(Number(e.target.value))}
+                                 className="w-full accent-cyan-500"
+                               />
+                             </div>
+                           </div>
+                         )}
+
+                         {!autoRandomOnEmotionChange && (
+                           <div>
+                             <label className="text-xs text-gray-300 flex justify-between mb-2">
+                               <span>Intervalo de Tiempo</span>
+                               <span className="text-cyan-400">{autoRandomInterval}s</span>
+                             </label>
+                             <input
+                               type="range"
+                               min="5"
+                               max="60"
+                               step="1"
+                               value={autoRandomInterval}
+                               onChange={(e) => setAutoRandomInterval(Number(e.target.value))}
+                               className="w-full accent-cyan-500"
+                             />
+                           </div>
+                         )}
+                       </>
+                     )}
+                   </div>
+                 </div>
+               </div>
+            </div>
+
             {/* Auto Pilot Section */}
             <div className="liquid-section break-inside-avoid">
                <div className="flex justify-between items-center mb-4">
@@ -1993,139 +2112,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   <Upload className="w-5 h-5 icon-neon" />
                   Importar Preset
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Randomizer Modal */}
-      {showRandomizerMenu && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="liquid-panel w-full max-w-md p-6 border border-white/20 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold neon-text flex items-center gap-2">
-                <Shuffle className="w-6 h-6 icon-neon" />
-                Aleatorización Global
-              </h2>
-              <button onClick={() => setShowRandomizerMenu(false)} className="text-gray-400 hover:text-white">
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => { generateRandomParams('random', false); setShowRandomizerMenu(false); }}
-                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-cyan-300 hover:text-cyan-200"
-                >
-                  <Shuffle size={20} />
-                  <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Total</span>
-                </button>
-                <button
-                  onClick={() => { generateRandomParams('smart', false); setShowRandomizerMenu(false); }}
-                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-emerald-300 hover:text-emerald-200"
-                >
-                  <BrainCircuit size={20} />
-                  <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Inteligente</span>
-                </button>
-                <button
-                  onClick={() => { generateRandomParams('dj', false); setShowRandomizerMenu(false); }}
-                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-purple-400 hover:text-purple-300"
-                >
-                  <Music size={20} />
-                  <span className="text-xs font-semibold text-center leading-tight">Modo<br/>DJ</span>
-                </button>
-              </div>
-
-              <div className="bg-black/30 p-4 rounded-2xl border border-white/10">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                  <Activity size={16} className="text-purple-400" />
-                  Auto-Regeneración
-                </h3>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-gray-300">Modo Automático</label>
-                    <select
-                      value={autoRandomMode}
-                      onChange={(e) => handleAutoRandomModeChange(e.target.value as any)}
-                      className="bg-black/50 border border-white/10 text-cyan-300 text-xs rounded-lg p-2 outline-none"
-                    >
-                      <option value="none">Apagado</option>
-                      <option value="random">Aleatorio Total</option>
-                      <option value="smart">Aleatorio Inteligente</option>
-                      <option value="dj">Modo DJ</option>
-                    </select>
-                  </div>
-
-                  {autoRandomMode !== 'none' && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs text-gray-300">Detección de Emoción/Estilo</label>
-                        <input
-                          type="checkbox"
-                          checked={autoRandomOnEmotionChange}
-                          onChange={(e) => setAutoRandomOnEmotionChange(e.target.checked)}
-                          className="w-4 h-4 accent-cyan-500"
-                        />
-                      </div>
-
-                      {autoRandomOnEmotionChange && (
-                        <div className="space-y-4 mt-4">
-                          <div className="flex flex-col items-center">
-                            <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
-                              <span>Sensibilidad a Emoción</span>
-                              <span className="text-cyan-400">{autoEmotionSensitivity}%</span>
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="1"
-                              value={autoEmotionSensitivity}
-                              onChange={(e) => setAutoEmotionSensitivity(Number(e.target.value))}
-                              className="w-full accent-cyan-500"
-                            />
-                          </div>
-                          
-                          <div className="flex flex-col items-center">
-                            <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
-                              <span>Fluidez de Estilo</span>
-                              <span className="text-cyan-400">{autoStyleFluidity}%</span>
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="1"
-                              value={autoStyleFluidity}
-                              onChange={(e) => setAutoStyleFluidity(Number(e.target.value))}
-                              className="w-full accent-cyan-500"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {!autoRandomOnEmotionChange && (
-                        <div>
-                          <label className="text-xs text-gray-300 flex justify-between mb-2">
-                            <span>Intervalo de Tiempo</span>
-                            <span className="text-cyan-400">{autoRandomInterval}s</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="5"
-                            max="60"
-                            step="1"
-                            value={autoRandomInterval}
-                            onChange={(e) => setAutoRandomInterval(Number(e.target.value))}
-                            className="w-full accent-cyan-500"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </div>
