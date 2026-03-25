@@ -221,7 +221,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       targetParams.sgGlobalFlowSpeed = isDJ ? 1.5 + Math.random() * 2.0 : 0.5 + Math.random() * 1.5;
       targetParams.sgGlobalAudioReactivity = isDJ ? 2.0 + Math.random() * 4.0 : 0.5 + Math.random() * 2;
       targetParams.sgGlobalViscosity = Math.random();
-      targetParams.sgDrawMode = Math.random() > 0.5 ? 'layers' : 'nodes';
+      
+      const drawModes = ['layers', 'nodes', 'both'] as const;
+      targetParams.sgDrawMode = mode === 'smart' ? 'both' : drawModes[Math.floor(Math.random() * drawModes.length)];
+      
       targetParams.sgShowNodes = isDJ ? true : Math.random() > 0.3;
       
       const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
@@ -507,7 +510,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           sgGlobalOpacity: Math.random() * 3,
           sgGlobalFlowSpeed: (Math.random() - 0.5) * 6,
           sgGlobalAudioReactivity: Math.random() * 5,
-          sgGlobalViscosity: Math.random() * 3
+          sgGlobalViscosity: Math.random() * 3,
+          sgDrawMode: 'both'
         }));
         break;
       case 'vrAr':
@@ -1365,7 +1369,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
                     Modo de Dibujo
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
                     <button
                       onClick={() => handleChange('sgDrawMode', 'layers')}
                       className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
@@ -1375,6 +1379,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                       }`}
                     >
                       Capas Infinitas
+                    </button>
+                    <button
+                      onClick={() => handleChange('sgDrawMode', 'both')}
+                      className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
+                        params.sgDrawMode === 'both' 
+                          ? 'liquid-bubble text-emerald-300' 
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                      }`}
+                    >
+                      Ambos
                     </button>
                     <button
                       onClick={() => handleChange('sgDrawMode', 'nodes')}
@@ -1389,7 +1403,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   </div>
                 </div>
 
-                {params.sgDrawMode === 'nodes' && (
+                {(params.sgDrawMode === 'nodes' || params.sgDrawMode === 'both') && (
                   <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
                      <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
                         Mostrar Nodos Emanantes

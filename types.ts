@@ -84,7 +84,7 @@ export interface VisualizerParams {
   sacredGeometryModes: SacredGeometryMode[]; // For the separate SG layer
   sgSettings: Record<SacredGeometryMode, SacredGeometrySettings>;
   sgShowNodes: boolean;
-  sgDrawMode: 'nodes' | 'layers';
+  sgDrawMode: 'nodes' | 'layers' | 'both';
   sgAutoResonance: boolean;
   sgTheme: 'light' | 'dark';
   sgAutoHarmonic: boolean;

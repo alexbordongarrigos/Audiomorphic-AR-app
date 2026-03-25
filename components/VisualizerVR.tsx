@@ -705,7 +705,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
         const regime = params.geometryData?.regime || 'primary';
         const baseLightness = regime === 'reciprocal' ? params.brightness + 30 : params.brightness + 15;
 
-        if (params.sgDrawMode === 'layers' || params.arPortalMode) {
+        if (params.sgDrawMode === 'layers' || params.sgDrawMode === 'both' || params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
                 const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
                 if (!settings) return;
@@ -779,7 +779,9 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
                     }
                 }
             });
-        } else if (params.sgDrawMode === 'nodes' && params.sgShowNodes && !params.arPortalMode) {
+        }
+        
+        if ((params.sgDrawMode === 'nodes' || params.sgDrawMode === 'both') && params.sgShowNodes && !params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
                 const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
                 if (!settings) return;
@@ -843,7 +845,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
 
   return (
     <group>
-      {(params.spiralResonanceModes && params.spiralResonanceModes.length > 0) && params.sgDrawMode === 'nodes' && !params.arPortalMode ? (
+      {(params.spiralResonanceModes && params.spiralResonanceModes.length > 0) && (params.sgDrawMode === 'nodes' || params.sgDrawMode === 'both') && !params.arPortalMode ? (
         <points>
           <bufferGeometry ref={geometryRef}>
             <bufferAttribute

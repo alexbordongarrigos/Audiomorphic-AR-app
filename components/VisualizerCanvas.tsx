@@ -417,7 +417,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       const spiralPoints: {x: number, y: number, mag: number, angle: number}[] = [];
 
       // --- NEW LAYERED VISUALIZATION (BACKGROUND) ---
-      if (p.sacredGeometryEnabled && p.sgDrawMode === 'layers') {
+      if (p.sacredGeometryEnabled && (p.sgDrawMode === 'layers' || p.sgDrawMode === 'both')) {
           const modes = p.sacredGeometryModes || ['flowerOfLife'];
           const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
           
@@ -707,7 +707,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       // Draw Sacred Geometry Web (Nodes)
       if (p.sacredGeometryEnabled && spiralPoints.length > 0) {
           
-          if (p.sgDrawMode === 'nodes' && p.sgShowNodes) {
+          if ((p.sgDrawMode === 'nodes' || p.sgDrawMode === 'both') && p.sgShowNodes) {
               // --- ORIGINAL EMANATING NODES ---
               const getSpiralPoint = (t: number) => {
                   const len = spiralPoints.length;
