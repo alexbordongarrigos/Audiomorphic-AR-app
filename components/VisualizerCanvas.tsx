@@ -1,5 +1,23 @@
 import React, { useRef, useEffect } from 'react';
-import { VisualizerParams } from '../types';
+import { VisualizerParams, DEFAULT_PARAMS } from '../types';
+import {
+  drawMetatron,
+  drawMerkaba,
+  drawPlatonicSolids,
+  drawSriYantra,
+  drawCymatics,
+  drawVectorEquilibrium,
+  drawTreeOfLife,
+  drawYinYang,
+  drawMandala1,
+  drawMandala2,
+  drawMandala3,
+  drawHolographicFractal,
+  drawChakras,
+  drawOm,
+  drawLotus,
+  drawDharmaChakra
+} from './geometryDrawers';
 
 interface VisualizerCanvasProps {
   params: VisualizerParams;
@@ -310,7 +328,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               const audioReactivity = 4.0 + sFreq * 2.0;
               
               currentSgSettings[mode] = {
-                  ...p.sgSettings[mode],
+                  ...(DEFAULT_PARAMS.sgSettings[mode] || {}),
+                  ...(p.sgSettings[mode] || {}),
                   complexity,
                   connectionSpan: Math.floor(100 + slowOsc * 20),
                   scale: Math.max(0.05, scale),
@@ -332,7 +351,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
           }
           
           modes.forEach(mode => {
-              const baseSettings = currentSgSettings[mode];
+              const baseSettings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+              if (!baseSettings) return;
               currentSgSettings[mode] = {
                   ...baseSettings,
                   lineOpacity: Math.max(0.0, Math.min(1.0, baseSettings.lineOpacity * (p.sgGlobalOpacity ?? 1.0))),
@@ -345,12 +365,10 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
       }
 
       // Clear with Trail
-      if (p.sgTheme === 'dark') {
-        ctx.fillStyle = `rgba(255, 255, 255, ${p.trail})`;
-      } else {
-        ctx.fillStyle = `rgba(0, 0, 0, ${p.trail})`;
-      }
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = `rgba(0, 0, 0, ${p.trail})`;
       ctx.fillRect(0, 0, width, height);
+      ctx.globalCompositeOperation = 'source-over';
 
       // --- DYNAMIC CALCULATIONS ---
       
@@ -404,7 +422,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
           const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
           
           activeModes.forEach((mode, modeIndex) => {
-              const settings = currentSgSettings[mode];
+              const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+              if (!settings) return;
               const numLayers = Math.max(1, Math.floor(settings.complexity));
               const baseRadius = Math.min(width, height) * 0.1 * settings.scale;
               const effectiveFlowSpeed = settings.flowSpeed * 0.5 * (1 - settings.viscosity * 0.8);
@@ -453,6 +472,38 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                           drawQuantumCloud(ctx, cx, cy, modeRadius, timeRef.current, sVol * effectiveReactivity, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, settings.thickness);
                       } else if (mode === 'goldenSpiral') {
                           drawGoldenSpiral(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'metatron') {
+                          drawMetatron(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'merkaba') {
+                          drawMerkaba(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'platonicSolids') {
+                          drawPlatonicSolids(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'sriYantra') {
+                          drawSriYantra(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'cymatics') {
+                          drawCymatics(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'vectorEquilibrium') {
+                          drawVectorEquilibrium(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'treeOfLife') {
+                          drawTreeOfLife(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'yinYang') {
+                          drawYinYang(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'mandala1') {
+                          drawMandala1(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'mandala2') {
+                          drawMandala2(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'mandala3') {
+                          drawMandala3(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'holographicFractal') {
+                          drawHolographicFractal(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'chakras') {
+                          drawChakras(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'om') {
+                          drawOm(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'lotus') {
+                          drawLotus(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
+                      } else if (mode === 'dharmaChakra') {
+                          drawDharmaChakra(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, timeRef.current, sVol * effectiveReactivity, settings.thickness);
                       }
                   }
               }
@@ -497,7 +548,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
             let totalOffsetY = 0;
             
             activeModes.forEach(mode => {
-                const settings = p.sgSettings[mode];
+                const settings = p.sgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+                if (!settings) return;
                 const react = settings.audioReactivity;
                 if (mode === 'goldenSpiral') {
                     const angle = Math.atan2(py - cy, px - cx);
@@ -519,6 +571,80 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                     const angle = Math.atan2(py - cy, px - cx);
                     totalOffsetX += Math.cos(angle) * fold;
                     totalOffsetY += Math.sin(angle) * fold;
+                } else if (mode === 'metatron') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const hex = Math.cos(angle * 6) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * hex;
+                    totalOffsetY += Math.sin(angle) * hex;
+                } else if (mode === 'merkaba') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const tri1 = Math.sin(angle * 3 + t) * 10 * sVol * react;
+                    const tri2 = Math.sin(angle * 3 - t + Math.PI) * 10 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * (tri1 + tri2);
+                    totalOffsetY += Math.sin(angle) * (tri1 + tri2);
+                } else if (mode === 'platonicSolids') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const poly = Math.cos(angle * 5 + t * 2) * 12 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * poly;
+                    totalOffsetY += Math.sin(angle) * poly;
+                } else if (mode === 'sriYantra') {
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const triangles = Math.sin(angle * 9) * Math.cos(dist * 0.05) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * triangles;
+                    totalOffsetY += Math.sin(angle) * triangles;
+                } else if (mode === 'cymatics') {
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const nodes = 6 + Math.floor(sVol * 6) * 2;
+                    const wave = Math.sin(nodes * angle + t) * Math.cos(dist * 0.02 - t) * 20 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * wave;
+                    totalOffsetY += Math.sin(angle) * wave;
+                } else if (mode === 'vectorEquilibrium') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const jitter = Math.sin(t * 4) * Math.cos(angle * 12) * 10 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * jitter;
+                    totalOffsetY += Math.sin(angle) * jitter;
+                } else if (mode === 'treeOfLife') {
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const nodes = Math.sin(dist * 0.1) * Math.cos(dist * 0.05) * 12 * sVol * react;
+                    totalOffsetY += nodes; // Vertical bias
+                } else if (mode === 'yinYang') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const swirl = Math.sin(angle + t) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle + Math.PI/2) * swirl;
+                    totalOffsetY += Math.sin(angle + Math.PI/2) * swirl;
+                } else if (mode === 'mandala1' || mode === 'mandala2' || mode === 'mandala3') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const petals = Math.cos(angle * 8 + t) * 12 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * petals;
+                    totalOffsetY += Math.sin(angle) * petals;
+                } else if (mode === 'holographicFractal') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const frac = Math.sin(angle * 6) * Math.cos(dist * 0.1 + t) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * frac;
+                    totalOffsetY += Math.sin(angle) * frac;
+                } else if (mode === 'chakras') {
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const pulse = Math.sin(dist * 0.05 - t * 3) * 10 * sVol * react;
+                    totalOffsetY -= pulse; // Upward flow
+                } else if (mode === 'om') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const dist = Math.sqrt((px-cx)**2 + (py-cy)**2);
+                    const vibration = Math.sin(dist * 0.02 - t * 5) * Math.cos(angle * 3) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * vibration;
+                    totalOffsetY += Math.sin(angle) * vibration;
+                } else if (mode === 'lotus') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const open = Math.sin(angle * 8) * Math.max(0, Math.sin(t)) * 15 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * open;
+                    totalOffsetY += Math.sin(angle) * open;
+                } else if (mode === 'dharmaChakra') {
+                    const angle = Math.atan2(py - cy, px - cx);
+                    const wheel = Math.cos(angle * 8 + t * 2) * 12 * sVol * react;
+                    totalOffsetX += Math.cos(angle) * wheel;
+                    totalOffsetY += Math.sin(angle) * wheel;
                 }
             });
             
@@ -607,7 +733,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
               const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
               
               activeModes.forEach((mode, modeIndex) => {
-                  const settings = currentSgSettings[mode];
+                  const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+                  if (!settings) return;
                   const numNodes = Math.max(1, Math.floor(settings.complexity));
                   const step = spiralPoints.length / numNodes;
                   
@@ -677,7 +804,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
   }, []); 
 
   return (
-    <div className="w-full h-full relative bg-black overflow-hidden shadow-inner">
+    <div className="w-full h-full relative bg-transparent overflow-hidden shadow-inner">
       <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );

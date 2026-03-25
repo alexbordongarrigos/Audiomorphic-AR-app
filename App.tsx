@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ControlPanel from './components/ControlPanel';
 import VisualizerCanvas from './components/VisualizerCanvas';
 import VisualizerVR from './components/VisualizerVR';
+import { BackgroundLayer } from './components/BackgroundLayer';
 import { VisualizerParams, DEFAULT_PARAMS, GeometryInfo, GeometryRegime } from './types';
 import { useAudioAnalyzer } from './hooks/useAudioAnalyzer';
 
@@ -310,6 +311,7 @@ const App: React.FC = () => {
       onPointerMove={() => { if (controlsVisible) resetHideTimer(); }}
     >
       <div className="absolute inset-0 z-0">
+        <BackgroundLayer params={params} getAudioMetrics={getAudioMetrics} />
         {(params.vrMode || params.arPortalMode) ? (
           <VisualizerVR 
             params={params} 
@@ -377,6 +379,7 @@ const App: React.FC = () => {
               audioActive={isActive}
               toggleAudio={toggleAudio}
               onClose={() => setControlsVisible(false)}
+              getAudioMetrics={getAudioMetrics}
             />
           </div>
         </>

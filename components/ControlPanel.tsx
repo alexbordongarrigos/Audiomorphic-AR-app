@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings, DEFAULT_PARAMS } from '../types';
 import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload } from 'lucide-react';
 
@@ -8,13 +8,252 @@ interface ControlPanelProps {
   audioActive: boolean;
   toggleAudio: () => void;
   onClose?: () => void;
+  getAudioMetrics: (sensitivity: number, freqRange: number) => { volume: number; frequency: number };
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioActive, toggleAudio, onClose }) => {
+const SACRED_GEOMETRY_OPTIONS = [
+  { id: 'goldenSpiral', label: 'Espiral Áurea' },
+  { id: 'flowerOfLife', label: 'Flor de la Vida' },
+  { id: 'quantumWave', label: 'Onda Cuántica' },
+  { id: 'torus', label: 'Toroide' },
+  { id: 'metatron', label: 'Cubo de Metatrón' },
+  { id: 'merkaba', label: 'Merkaba' },
+  { id: 'platonicSolids', label: 'Sólidos Platónicos' },
+  { id: 'sriYantra', label: 'Sri Yantra' },
+  { id: 'cymatics', label: 'Cimática' },
+  { id: 'vectorEquilibrium', label: 'Equilibrio Vectorial' },
+  { id: 'treeOfLife', label: 'Árbol de la Vida' },
+  { id: 'yinYang', label: 'Yin Yang' },
+  { id: 'mandala1', label: 'Mandala 1 (Externo)' },
+  { id: 'mandala2', label: 'Mandala 2 (Interno)' },
+  { id: 'mandala3', label: 'Mandala 3 (Secreto)' },
+  { id: 'holographicFractal', label: 'Fractal Holográfico' },
+  { id: 'chakras', label: 'Chakras' },
+  { id: 'om', label: 'Om' },
+  { id: 'lotus', label: 'Flor de Loto' },
+  { id: 'dharmaChakra', label: 'Dharma Chakra' }
+];
+
+const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioActive, toggleAudio, onClose, getAudioMetrics }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
   const [showPresetModal, setShowPresetModal] = useState(false);
+  const [showRandomizerMenu, setShowRandomizerMenu] = useState(false);
+  const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart'>('none');
+  const [autoRandomInterval, setAutoRandomInterval] = useState<number>(10);
+  const [autoRandomOnEmotionChange, setAutoRandomOnEmotionChange] = useState<boolean>(false);
+  const lastEmotionRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const generateRandomParams = useCallback((isSmart: boolean) => {
+    setParams(prev => {
+      const newParams = { ...prev };
+      
+      const metrics = getAudioMetrics(prev.sensitivity, prev.freqRange);
+      const hasAudio = audioActive && metrics.volume > 0.01;
+      
+      // Determine mood based on audio (if smart) or randomly
+      let mood = 'balanced';
+      if (isSmart && hasAudio) {
+        if (metrics.frequency < 0.3) mood = 'bass';
+        else if (metrics.frequency > 0.6) mood = 'treble';
+        else mood = 'mid';
+      } else {
+        const rand = Math.random();
+        if (rand < 0.33) mood = 'bass';
+        else if (rand < 0.66) mood = 'treble';
+        else mood = 'mid';
+      }
+
+      // Base Geometry
+      newParams.k = 1.0 + Math.random() * 0.03; // Keep K close to 1 for stability
+      newParams.psi = Math.random() * Math.PI * 2;
+      newParams.z0_r = (Math.random() - 0.5) * 0.2; // Keep centered
+      newParams.z0_i = (Math.random() - 0.5) * 0.2;
+      
+      // Mood-based settings
+      if (mood === 'bass') {
+        // Deep, slow, thick, dark
+        newParams.iter = 800 + Math.random() * 1000;
+        newParams.zoom = 0.001 + Math.random() * 0.002;
+        newParams.distanceZoom = 1.0 + Math.random() * 1.0;
+        newParams.spiralThickness = 1.0 + Math.random() * 1.5;
+        
+        newParams.baseHue = (Math.random() * 60 + 200) % 360; // Blues/Purples
+        newParams.hueRange = 60 + Math.random() * 60;
+        newParams.saturation = 60 + Math.random() * 40;
+        newParams.brightness = 5 + Math.random() * 15;
+        newParams.hueSpeed = 0.05 + Math.random() * 0.15;
+        newParams.trail = 0.8 + Math.random() * 0.15; // High trail for smoothness
+        
+        newParams.sgTheme = 'dark';
+        newParams.autoSpeed = 0.2 + Math.random() * 0.5;
+        newParams.autoViscosity = 0.8 + Math.random() * 0.15;
+        newParams.bgSpeed = 0.1 + Math.random() * 0.3;
+      } else if (mood === 'treble') {
+        // Fast, sharp, bright, chaotic
+        newParams.iter = 1500 + Math.random() * 1500;
+        newParams.zoom = 0.0005 + Math.random() * 0.001;
+        newParams.distanceZoom = 0.5 + Math.random() * 0.5;
+        newParams.spiralThickness = 0.2 + Math.random() * 0.6;
+        
+        newParams.baseHue = (Math.random() * 60 + 0) % 360; // Reds/Yellows
+        newParams.hueRange = 180 + Math.random() * 180;
+        newParams.saturation = 80 + Math.random() * 20;
+        newParams.brightness = 20 + Math.random() * 30;
+        newParams.hueSpeed = 0.5 + Math.random() * 1.0;
+        newParams.trail = 0.2 + Math.random() * 0.3; // Low trail for sharpness
+        
+        newParams.sgTheme = 'light';
+        newParams.autoSpeed = 1.5 + Math.random() * 1.5;
+        newParams.autoViscosity = 0.1 + Math.random() * 0.3;
+        newParams.bgSpeed = 1.0 + Math.random() * 1.0;
+      } else {
+        // Balanced, harmonic, mid-range
+        newParams.iter = 1000 + Math.random() * 1000;
+        newParams.zoom = 0.0008 + Math.random() * 0.0015;
+        newParams.distanceZoom = 0.8 + Math.random() * 0.7;
+        newParams.spiralThickness = 0.6 + Math.random() * 0.8;
+        
+        newParams.baseHue = Math.random() * 360;
+        newParams.hueRange = 90 + Math.random() * 90;
+        newParams.saturation = 70 + Math.random() * 30;
+        newParams.brightness = 15 + Math.random() * 20;
+        newParams.hueSpeed = 0.2 + Math.random() * 0.4;
+        newParams.trail = 0.5 + Math.random() * 0.3;
+        
+        newParams.sgTheme = Math.random() > 0.5 ? 'light' : 'dark';
+        newParams.autoSpeed = 0.7 + Math.random() * 0.8;
+        newParams.autoViscosity = 0.4 + Math.random() * 0.4;
+        newParams.bgSpeed = 0.4 + Math.random() * 0.6;
+      }
+
+      newParams.harmonicColor = Math.random() > 0.3;
+      
+      // Sacred Geometry
+      newParams.sacredGeometryEnabled = Math.random() > 0.2; // 80% chance to have SG
+      newParams.sgAutoHarmonic = Math.random() > 0.3;
+      newParams.sgAutoResonance = Math.random() > 0.3;
+      newParams.sgGlobalOpacity = 0.4 + Math.random() * 0.6;
+      newParams.sgGlobalFlowSpeed = 0.5 + Math.random() * 1.5;
+      newParams.sgGlobalAudioReactivity = 0.5 + Math.random() * 2;
+      newParams.sgGlobalViscosity = Math.random();
+      newParams.sgDrawMode = Math.random() > 0.5 ? 'layers' : 'nodes';
+      newParams.sgShowNodes = Math.random() > 0.3;
+      
+      // Select 1 to 3 random SG modes
+      const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
+      const numSgModes = 1 + Math.floor(Math.random() * 3);
+      const selectedSgModes = [];
+      for (let i = 0; i < numSgModes; i++) {
+        selectedSgModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
+      }
+      newParams.sacredGeometryModes = [...new Set(selectedSgModes)];
+      
+      // Spiral Resonance Modes
+      const numSpiralModes = 1 + Math.floor(Math.random() * 2);
+      const selectedSpiralModes = [];
+      for (let i = 0; i < numSpiralModes; i++) {
+        selectedSpiralModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
+      }
+      newParams.spiralResonanceModes = [...new Set(selectedSpiralModes)];
+
+      // Randomize sgSettings for all modes
+      const newSgSettings = { ...prev.sgSettings };
+      allSgModes.forEach(mode => {
+        newSgSettings[mode] = {
+          ...newSgSettings[mode],
+          complexity: 1 + Math.random() * 4,
+          connectionSpan: 50 + Math.random() * 100,
+          scale: 0.05 + Math.random() * 0.15,
+          lineOpacity: 0.3 + Math.random() * 0.7,
+          bgOpacity: Math.random() * 0.3,
+          thickness: 0.05 + Math.random() * 0.15,
+          flowSpeed: 0.1 + Math.random() * 0.9,
+          audioReactivity: 1 + Math.random() * 5,
+          viscosity: Math.random(),
+          colored: Math.random() > 0.3,
+          customColor: Math.random() * 360
+        };
+      });
+      newParams.sgSettings = newSgSettings;
+      
+      // Reactivity
+      newParams.sensitivity = 3 + Math.random() * 5;
+      newParams.freqRange = 0.5 + Math.random() * 1.0;
+      
+      // Transformation
+      newParams.autoPilot = Math.random() > 0.1; // 90% chance to be on
+      const apModes: AutoPilotMode[] = ['drift', 'harmonic', 'genesis'];
+      newParams.autoPilotMode = apModes[Math.floor(Math.random() * apModes.length)];
+      newParams.rootNote = Math.floor(Math.random() * 12);
+      
+      // Background
+      const bgModes: BackgroundMode[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
+      newParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
+      
+      // Generate coherent background colors based on mood
+      if (mood === 'bass') {
+        newParams.bgColor1 = `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`;
+        newParams.bgColor2 = `#000000`;
+      } else if (mood === 'treble') {
+        newParams.bgColor1 = `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`;
+        newParams.bgColor2 = `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`;
+      } else {
+        newParams.bgColor1 = `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`;
+        newParams.bgColor2 = `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`;
+      }
+      
+      newParams.bgVignetteIntensity = 0.4 + Math.random() * 0.5;
+
+      return newParams;
+    });
+  }, [setParams, getAudioMetrics, audioActive]);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    if (autoRandomMode !== 'none' && !autoRandomOnEmotionChange) {
+      intervalId = setInterval(() => {
+        generateRandomParams(autoRandomMode === 'smart');
+      }, autoRandomInterval * 1000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [autoRandomMode, autoRandomInterval, autoRandomOnEmotionChange, generateRandomParams]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+    let lastTriggerTime = 0;
+    
+    const checkEmotion = () => {
+      if (autoRandomMode !== 'none' && autoRandomOnEmotionChange && audioActive) {
+        const now = Date.now();
+        const metrics = getAudioMetrics(params.sensitivity, params.freqRange);
+        const currentEmotion = metrics.frequency;
+        
+        // Detect significant change in frequency (emotion)
+        // Cooldown of at least 3 seconds between triggers
+        if (Math.abs(currentEmotion - lastEmotionRef.current) > 0.3 && now - lastTriggerTime > 3000) {
+          generateRandomParams(autoRandomMode === 'smart');
+          lastEmotionRef.current = currentEmotion;
+          lastTriggerTime = now;
+        } else {
+          // Slowly adapt last emotion to current to prevent getting stuck
+          lastEmotionRef.current = lastEmotionRef.current * 0.95 + currentEmotion * 0.05;
+        }
+      }
+      animationFrameId = requestAnimationFrame(checkEmotion);
+    };
+    
+    checkEmotion();
+    
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [autoRandomMode, autoRandomOnEmotionChange, audioActive, params.sensitivity, params.freqRange, generateRandomParams, getAudioMetrics]);
 
   const handleInstallClick = () => {
     window.open("https://drive.google.com/drive/folders/1bZ8yvbWr7r3eJUdKIQCSSuu-p398mAkn?usp=sharing", "_blank");
@@ -80,6 +319,95 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   const handleChange = (key: keyof VisualizerParams, value: number | boolean | string | string[]) => {
     if (typeof value === 'number' && isNaN(value)) return;
     setParams(prev => ({ ...prev, [key]: value }));
+  };
+
+  const randomizeSection = (section: string) => {
+    switch (section) {
+      case 'background':
+        const modes: any[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
+        setParams(prev => ({
+          ...prev,
+          bgMode: modes[Math.floor(Math.random() * modes.length)],
+          bgColor1: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+          bgColor2: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+          bgSpeed: Math.random() * 2,
+          bgVignetteIntensity: Math.random()
+        }));
+        break;
+      case 'baseGeometry':
+        setParams(prev => ({
+          ...prev,
+          k: 0.9 + Math.random() * 0.2,
+          iter: Math.floor(500 + Math.random() * 1500),
+          zoom: 0.0001 + Math.random() * 0.0099,
+          distanceZoom: 0.1 + Math.random() * 4.9,
+          spiralThickness: 0.1 + Math.random() * 4.9
+        }));
+        break;
+      case 'transformation':
+        setParams(prev => ({
+          ...prev,
+          psi: Math.random() * Math.PI * 2,
+          z0_r: (Math.random() - 0.5) * 2,
+          z0_i: (Math.random() - 0.5) * 2
+        }));
+        break;
+      case 'color':
+        setParams(prev => ({
+          ...prev,
+          baseHue: Math.random() * 360,
+          hueSpeed: Math.random() * 2,
+          hueRange: Math.random() * 720,
+          saturation: 50 + Math.random() * 50,
+          brightness: Math.random() * 100,
+          harmonicSensitivity: Math.random() * 5,
+          harmonicDepth: Math.random() * 360
+        }));
+        break;
+      case 'reactivity':
+        setParams(prev => ({
+          ...prev,
+          sensitivity: Math.random() * 5,
+          freqRange: 0.1 + Math.random() * 0.9,
+          trail: Math.random()
+        }));
+        break;
+      case 'spiralResonance':
+        const resModes = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'seedOfLife', 'treeOfLife', 'vesicaPiscis', 'fibonacci', 'enneagram', 'hexagram', 'pentagram', 'heptagram', 'octagram', 'nonagram', 'decagram'];
+        const randomResModes = resModes.filter(() => Math.random() > 0.7);
+        setParams(prev => ({
+          ...prev,
+          spiralResonanceModes: randomResModes.length > 0 ? randomResModes : [resModes[Math.floor(Math.random() * resModes.length)]]
+        }));
+        break;
+      case 'sacredGeometry':
+        const sgModes = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'seedOfLife', 'treeOfLife', 'vesicaPiscis', 'fibonacci', 'enneagram', 'hexagram', 'pentagram', 'heptagram', 'octagram', 'nonagram', 'decagram'];
+        const randomSgModes = sgModes.filter(() => Math.random() > 0.7);
+        setParams(prev => ({
+          ...prev,
+          sacredGeometryModes: randomSgModes.length > 0 ? randomSgModes : [sgModes[Math.floor(Math.random() * sgModes.length)]],
+          sgGlobalOpacity: Math.random() * 3,
+          sgGlobalFlowSpeed: (Math.random() - 0.5) * 6,
+          sgGlobalAudioReactivity: Math.random() * 5,
+          sgGlobalViscosity: Math.random() * 3
+        }));
+        break;
+      case 'vrAr':
+        setParams(prev => ({
+          ...prev,
+          vrDepth: 1 + Math.random() * 99,
+          vrRadius: Math.random() * 20,
+          vrThickness: 0.1 + Math.random() * 9.9,
+          vrDistance: (Math.random() - 0.5) * 40,
+          arIntensity: Math.random(),
+          arPortalScale: 0.1 + Math.random() * 19.9,
+          arPortalPerspectiveIntensity: Math.random() * 5,
+          arPortalVanishingRadius: Math.random() * 10,
+          arPortalFade: Math.random() * 5,
+          arPortalBending: Math.random()
+        }));
+        break;
+    }
   };
 
   const centerSpiral = () => setParams(prev => ({ ...prev, z0_r: 0, z0_i: 0 }));
@@ -169,7 +497,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           if (json.sgGlobalFlowSpeed !== undefined) importData.sgGlobalFlowSpeed = json.sgGlobalFlowSpeed;
           if (json.sgGlobalAudioReactivity !== undefined) importData.sgGlobalAudioReactivity = json.sgGlobalAudioReactivity;
           if (json.sgGlobalViscosity !== undefined) importData.sgGlobalViscosity = json.sgGlobalViscosity;
-          if (json.sgSettings !== undefined) importData.sgSettings = json.sgSettings;
+          if (json.sgSettings !== undefined) {
+            importData.sgSettings = { ...DEFAULT_PARAMS.sgSettings };
+            for (const key in json.sgSettings) {
+              const mode = key as SacredGeometryMode;
+              if (importData.sgSettings[mode]) {
+                importData.sgSettings[mode] = { ...importData.sgSettings[mode], ...json.sgSettings[mode] };
+              }
+            }
+          }
           if (json.spiralResonanceModes !== undefined) importData.spiralResonanceModes = json.spiralResonanceModes;
         }
         if (presetCategories.vrAr) {
@@ -322,15 +658,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       </svg>
       <style>{`
         .liquid-panel {
-          background: rgba(20, 25, 30, calc(${params.menuTransparency} * 0.4));
-          backdrop-filter: blur(50px) saturate(180%) contrast(110%);
-          -webkit-backdrop-filter: blur(50px) saturate(180%) contrast(110%);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(20, 25, 30, calc(${params.menuTransparency} * 0.2));
+          backdrop-filter: blur(calc(${params.menuTransparency} * 20px)) saturate(150%) contrast(110%);
+          -webkit-backdrop-filter: blur(calc(${params.menuTransparency} * 20px)) saturate(150%) contrast(110%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           box-shadow: 
             0 40px 100px rgba(0, 0, 0, 0.6),
-            inset 0 2px 4px rgba(255, 255, 255, 0.5),
-            inset 0 -10px 40px rgba(255, 255, 255, 0.1),
-            inset 0 20px 60px rgba(255, 255, 255, 0.05);
+            inset 0 2px 4px rgba(255, 255, 255, 0.2),
+            inset 0 -10px 40px rgba(255, 255, 255, 0.05),
+            inset 0 20px 60px rgba(255, 255, 255, 0.02);
           border-radius: 32px;
           overflow: hidden;
           position: relative;
@@ -646,6 +982,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           </div>
           <div className="flex flex-wrap justify-center items-center gap-2 md:gap-3 w-full md:w-auto">
             <button
+              onClick={() => setShowRandomizerMenu(true)}
+              className={`liquid-bubble p-2 md:p-3 ${autoRandomMode !== 'none' ? 'text-green-400' : 'text-cyan-400'} hover:text-cyan-300`}
+              title="Menú de Aleatorización"
+            >
+              <Shuffle size={20} className="icon-neon" />
+            </button>
+            <button
               onClick={() => setParams(DEFAULT_PARAMS)}
               className="liquid-bubble p-2 md:p-3 text-red-400 hover:text-red-300"
               title="Restaurar Valores por Defecto"
@@ -806,16 +1149,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
             {/* Perturbación de Espiral Section */}
             <div className="liquid-section break-inside-avoid border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)]">
-              <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2 mb-4">
-                <Waves className="w-5 h-5 icon-neon-emerald" /> Perturbación de Espiral
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2">
+                  <Waves className="w-5 h-5 icon-neon-emerald" /> Perturbación de Espiral
+                </h3>
+                <button onClick={() => randomizeSection('spiralResonance')} className="text-emerald-400 hover:text-emerald-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon-emerald" />
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
-                {[
-                  { id: 'goldenSpiral', label: 'Espiral Áurea' },
-                  { id: 'flowerOfLife', label: 'Flor de la Vida' },
-                  { id: 'quantumWave', label: 'Onda Cuántica' },
-                  { id: 'torus', label: 'Toroide' }
-                ].map(mode => {
+                {SACRED_GEOMETRY_OPTIONS.map(mode => {
                   const isActive = params.spiralResonanceModes?.includes(mode.id as any);
                   return (
                     <button
@@ -849,12 +1192,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2">
                   <Sprout className="w-5 h-5 icon-neon-emerald" /> Geometría Sagrada
                 </h3>
-                <div 
-                   onClick={() => handleChange('sacredGeometryEnabled', !params.sacredGeometryEnabled)}
-                   className={`liquid-switch shrink-0 ${params.sacredGeometryEnabled ? 'active' : ''}`}
-                 >
-                   <div className="liquid-switch-thumb"></div>
-                 </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => randomizeSection('sacredGeometry')} className="text-emerald-400 hover:text-emerald-300 transition-colors" title="Armonía Aleatoria">
+                    <Shuffle size={18} className="icon-neon-emerald" />
+                  </button>
+                  <div 
+                     onClick={() => handleChange('sacredGeometryEnabled', !params.sacredGeometryEnabled)}
+                     className={`liquid-switch shrink-0 ${params.sacredGeometryEnabled ? 'active' : ''}`}
+                   >
+                     <div className="liquid-switch-thumb"></div>
+                   </div>
+                </div>
               </div>
 
               {params.sacredGeometryEnabled && (
@@ -864,12 +1212,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                       Tipos de Geometría
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
-                      {[
-                        { id: 'goldenSpiral', label: 'Espiral Áurea' },
-                        { id: 'flowerOfLife', label: 'Flor de la Vida' },
-                        { id: 'quantumWave', label: 'Onda Cuántica' },
-                        { id: 'torus', label: 'Toroide' }
-                      ].map(mode => {
+                      {SACRED_GEOMETRY_OPTIONS.map(mode => {
                         const isActive = params.sacredGeometryModes?.includes(mode.id as any);
                         return (
                           <button
@@ -1009,12 +1352,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                         Ajustes Independientes
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 mb-4 shadow-inner">
-                        {[
-                          { id: 'goldenSpiral', label: 'Espiral Áurea' },
-                          { id: 'flowerOfLife', label: 'Flor de la Vida' },
-                          { id: 'quantumWave', label: 'Onda Cuántica' },
-                          { id: 'torus', label: 'Toroide' }
-                        ].map(mode => (
+                        {SACRED_GEOMETRY_OPTIONS.map(mode => (
                           <button
                             key={`edit-${mode.id}`}
                             onClick={() => setSelectedSgEditMode(mode.id as SacredGeometryMode)}
@@ -1130,9 +1468,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
           {/* VR Section */}
             <div className="liquid-section break-inside-avoid border-purple-500/30 shadow-[inset_0_0_30px_rgba(168,85,247,0.05)]">
-              <h3 className="text-lg font-bold neon-text text-purple-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
-                <Glasses className="w-5 h-5 icon-neon-pink" /> Realidad Virtual
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text text-purple-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
+                  <Glasses className="w-5 h-5 icon-neon-pink" /> Realidad Virtual
+                </h3>
+                <button onClick={() => randomizeSection('vrAr')} className="text-purple-400 hover:text-purple-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon-pink" />
+                </button>
+              </div>
               
               <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
@@ -1225,9 +1568,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
             {/* AR Portal Section */}
             <div className="liquid-section break-inside-avoid border-emerald-500/30 shadow-[inset_0_0_30px_rgba(16,185,129,0.05)]">
-              <h3 className="text-lg font-bold neon-text text-emerald-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)'}}>
-                <Glasses className="w-5 h-5 icon-neon-pink" /> Portal AR
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text text-emerald-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)'}}>
+                  <Glasses className="w-5 h-5 icon-neon-pink" /> Portal AR
+                </h3>
+                <button onClick={() => randomizeSection('vrAr')} className="text-emerald-400 hover:text-emerald-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon-emerald" />
+                </button>
+              </div>
               
               <div className="mb-6 flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2">
                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">
@@ -1267,9 +1615,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               </div>
 
               <div className="liquid-section">
-                <h3 className="text-lg font-bold neon-text text-yellow-400 mb-6 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #fde047 0%, #eab308 100%)'}}>
-                  <Zap className="w-5 h-5 icon-neon" /> Reactividad
-                </h3>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold neon-text text-yellow-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #fde047 0%, #eab308 100%)'}}>
+                    <Zap className="w-5 h-5 icon-neon" /> Reactividad
+                  </h3>
+                  <button onClick={() => randomizeSection('reactivity')} className="text-yellow-400 hover:text-yellow-300 transition-colors" title="Armonía Aleatoria">
+                    <Shuffle size={18} className="icon-neon" />
+                  </button>
+                </div>
                 {renderControl("Sensibilidad", "sensitivity", 0.1, 5.0, 0.1)}
                 {renderControl("Espectro Freq", "freqRange", 0.1, 1.0, 0.05)}
                 {renderControl("Persistencia", "trail", 0.01, 1.0, 0.01)}
@@ -1278,9 +1631,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
             {/* Colors */}
             <div className="liquid-section break-inside-avoid border-pink-500/30 shadow-[inset_0_0_30px_rgba(236,72,153,0.05)]">
-              <h3 className="text-lg font-bold neon-text-pink mb-4 flex items-center gap-2">
-                <Palette className="w-5 h-5 icon-neon-pink" /> Cromatismo
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text-pink flex items-center gap-2">
+                  <Palette className="w-5 h-5 icon-neon-pink" /> Cromatismo
+                </h3>
+                <button onClick={() => randomizeSection('color')} className="text-pink-400 hover:text-pink-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon-pink" />
+                </button>
+              </div>
               
               <div className="mb-4 flex justify-between items-center bg-pink-900/20 p-3 rounded-2xl border border-pink-500/30 gap-2">
                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-pink-300 font-bold flex items-center gap-2 drop-shadow-[0_0_5px_rgba(236,72,153,0.5)] truncate flex-1">
@@ -1310,11 +1668,71 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               </div>
             </div>
 
+            {/* Background */}
+            <div className="liquid-section break-inside-avoid border-cyan-500/30 shadow-[inset_0_0_30px_rgba(0,242,254,0.05)]">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text flex items-center gap-2">
+                  <Palette className="w-5 h-5 icon-neon" /> Fondo
+                </h3>
+                <button onClick={() => randomizeSection('background')} className="text-cyan-400 hover:text-cyan-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon" />
+                </button>
+              </div>
+
+              <div className="mb-4 bg-black/20 p-4 rounded-2xl border border-white/5">
+                <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
+                  Modo de Fondo
+                </label>
+                <select 
+                  value={params.bgMode}
+                  onChange={(e) => handleChange('bgMode', e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 text-cyan-300 text-sm rounded-xl p-3 outline-none focus:border-cyan-400 shadow-inner appearance-none"
+                >
+                  <option value="solid">Color Sólido</option>
+                  <option value="gradient">Degradado</option>
+                  <option value="liquid-rainbow">Arcoíris Líquido</option>
+                  <option value="crystal-bubbles">Burbujas de Cristal</option>
+                  <option value="organic-fade">Transición Orgánica</option>
+                  <option value="morphing-colors">Colores Mórficos</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate">Color 1</label>
+                  <input type="color" value={params.bgColor1} onChange={(e) => handleChange('bgColor1', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent border-none" />
+                </div>
+                <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
+                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate">Color 2</label>
+                  <input type="color" value={params.bgColor2} onChange={(e) => handleChange('bgColor2', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent border-none" />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2 mb-4">
+                 <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Animado</label>
+                 <div onClick={() => handleChange('bgAnimatable', !params.bgAnimatable)} className={`liquid-switch shrink-0 ${params.bgAnimatable ? 'active' : ''}`}><div className="liquid-switch-thumb"></div></div>
+              </div>
+
+              {renderControl("Velocidad Animación", "bgSpeed", 0, 5, 0.1)}
+
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl border border-white/5 gap-2 mb-4 mt-4">
+                 <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate flex-1">Viñeta</label>
+                 <div onClick={() => handleChange('bgVignette', !params.bgVignette)} className={`liquid-switch shrink-0 ${params.bgVignette ? 'active' : ''}`}><div className="liquid-switch-thumb"></div></div>
+              </div>
+
+              {params.bgVignette && renderControl("Intensidad Viñeta", "bgVignetteIntensity", 0, 1, 0.05)}
+            </div>
+
             {/* Base Geometry */}
             <div className="liquid-section break-inside-avoid">
-              <h3 className="text-lg font-bold neon-text text-purple-400 mb-4 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
-                <Maximize className="w-5 h-5 icon-neon" /> Geometría Base
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold neon-text text-purple-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)'}}>
+                  <Maximize className="w-5 h-5 icon-neon" /> Geometría Base
+                </h3>
+                <button onClick={() => randomizeSection('baseGeometry')} className="text-purple-400 hover:text-purple-300 transition-colors" title="Armonía Aleatoria">
+                  <Shuffle size={18} className="icon-neon" />
+                </button>
+              </div>
               {renderControl("Factor K (Expansión)", "k", 0.8, 1.2, 0.001, undefined, params.autoPilot)}
               {renderControl("Detalle (Iteraciones)", "iter", 100, 2000, 10, undefined, false)}
               {renderControl("Profundidad (Zoom)", "zoom", 0.001, 3.0, 0.001, undefined, false)}
@@ -1328,13 +1746,18 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                  <h3 className="text-lg font-bold neon-text text-green-400 flex items-center gap-2" style={{backgroundImage: 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)'}}>
                   <RotateCw className="w-5 h-5 icon-neon" /> Transformación
                 </h3>
-                <button 
-                  onClick={centerSpiral}
-                  disabled={params.autoPilot}
-                  className={`liquid-bubble px-3 py-2 text-xs uppercase font-bold text-cyan-300 flex items-center gap-1 ${params.autoPilot ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <Target size={14} className="icon-neon" /> CENTRAR
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => randomizeSection('transformation')} className="text-green-400 hover:text-green-300 transition-colors" title="Armonía Aleatoria">
+                    <Shuffle size={18} className="icon-neon" />
+                  </button>
+                  <button 
+                    onClick={centerSpiral}
+                    disabled={params.autoPilot}
+                    className={`liquid-bubble px-3 py-2 text-xs uppercase font-bold text-cyan-300 flex items-center gap-1 ${params.autoPilot ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Target size={14} className="icon-neon" /> CENTRAR
+                  </button>
+                </div>
               </div>
               
               {renderControl("Ángulo ψ", "psi", -6.28, 6.28, 0.01, undefined, params.autoPilot)}
@@ -1408,6 +1831,95 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   <Upload className="w-5 h-5 icon-neon" />
                   Importar Preset
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Randomizer Modal */}
+      {showRandomizerMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="liquid-panel w-full max-w-md p-6 border border-white/20 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold neon-text flex items-center gap-2">
+                <Shuffle className="w-6 h-6 icon-neon" />
+                Aleatorización Global
+              </h2>
+              <button onClick={() => setShowRandomizerMenu(false)} className="text-gray-400 hover:text-white">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => { generateRandomParams(false); setShowRandomizerMenu(false); }}
+                  className="liquid-bubble py-4 flex flex-col items-center gap-2 text-cyan-300 hover:text-cyan-200"
+                >
+                  <Shuffle size={24} />
+                  <span className="text-sm font-semibold">Aleatorio Total</span>
+                </button>
+                <button
+                  onClick={() => { generateRandomParams(true); setShowRandomizerMenu(false); }}
+                  className="liquid-bubble py-4 flex flex-col items-center gap-2 text-emerald-300 hover:text-emerald-200"
+                >
+                  <BrainCircuit size={24} />
+                  <span className="text-sm font-semibold">Aleatorio Inteligente</span>
+                </button>
+              </div>
+
+              <div className="bg-black/30 p-4 rounded-2xl border border-white/10">
+                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                  <Activity size={16} className="text-purple-400" />
+                  Auto-Regeneración
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-300">Modo Automático</label>
+                    <select
+                      value={autoRandomMode}
+                      onChange={(e) => setAutoRandomMode(e.target.value as any)}
+                      className="bg-black/50 border border-white/10 text-cyan-300 text-xs rounded-lg p-2 outline-none"
+                    >
+                      <option value="none">Apagado</option>
+                      <option value="random">Aleatorio Total</option>
+                      <option value="smart">Aleatorio Inteligente</option>
+                    </select>
+                  </div>
+
+                  {autoRandomMode !== 'none' && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs text-gray-300">Detectar Emoción/Estilo</label>
+                        <input
+                          type="checkbox"
+                          checked={autoRandomOnEmotionChange}
+                          onChange={(e) => setAutoRandomOnEmotionChange(e.target.checked)}
+                          className="w-4 h-4 accent-cyan-500"
+                        />
+                      </div>
+
+                      {!autoRandomOnEmotionChange && (
+                        <div>
+                          <label className="text-xs text-gray-300 flex justify-between mb-2">
+                            <span>Intervalo de Tiempo</span>
+                            <span className="text-cyan-400">{autoRandomInterval}s</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="5"
+                            max="60"
+                            step="1"
+                            value={autoRandomInterval}
+                            onChange={(e) => setAutoRandomInterval(Number(e.target.value))}
+                            className="w-full accent-cyan-500"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -7,7 +7,7 @@ import { StereoEffect } from 'three-stdlib';
 import { EffectComposer, Bloom, Noise, HueSaturation, Vignette, Glitch, ChromaticAberration, ColorAverage, DepthOfField } from '@react-three/postprocessing';
 import { BlendFunction, GlitchMode } from 'postprocessing';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-import { VisualizerParams } from '../types';
+import { VisualizerParams, DEFAULT_PARAMS } from '../types';
 import ControlPanel from './ControlPanel';
 
 const store = createXRStore();
@@ -462,6 +462,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
             const audioReactivity = 4.0 + sFreq * 2.0;
             
             currentSgSettings[mode] = {
+                ...(DEFAULT_PARAMS.sgSettings[mode] || {}),
+                ...(params.sgSettings[mode] || {}),
                 complexity,
                 connectionSpan: Math.floor(100 + slowOsc * 20),
                 scale: Math.max(0.05, scale),
@@ -485,7 +487,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
         }
         
         modes.forEach(mode => {
-            const baseSettings = currentSgSettings[mode];
+            const baseSettings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+            if (!baseSettings) return;
             currentSgSettings[mode] = {
                 ...baseSettings,
                 lineOpacity: Math.max(0.0, Math.min(1.0, baseSettings.lineOpacity * (params.sgGlobalOpacity ?? 1.0))),
@@ -575,7 +578,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
           let totalOffsetZ = 0;
           
           activeModes.forEach(mode => {
-              const settings = currentSgSettings[mode];
+              const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+              if (!settings) return;
               const react = settings.audioReactivity;
               const complexity = settings.complexity;
               const scale = settings.scale * 10; // scale up for 3D
@@ -703,7 +707,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
 
         if (params.sgDrawMode === 'layers' || params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
-                const settings = currentSgSettings[mode];
+                const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+                if (!settings) return;
                 // In AR portal mode, use many more layers to create a dense, continuous tunnel
                 const numLayers = params.arPortalMode ? Math.max(15, Math.floor(settings.complexity * 12)) : Math.max(3, Math.floor(settings.complexity * 5)); 
                 const baseRadius = 10 * settings.scale; 
@@ -776,7 +781,8 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
             });
         } else if (params.sgDrawMode === 'nodes' && params.sgShowNodes && !params.arPortalMode) {
             activeModes.forEach((mode, modeIndex) => {
-                const settings = currentSgSettings[mode];
+                const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
+                if (!settings) return;
                 const numNodes = Math.max(2, Math.floor(settings.complexity * 2));
                 const step = params.iter / numNodes;
                 const flowSpeed = settings.flowSpeed * 20; 
@@ -1055,12 +1061,7 @@ const DynamicCamera = ({
 const BackgroundHandler = ({ store }: { store: any }) => {
   const { scene } = useThree();
   useFrame(() => {
-    const session = store.getState().session;
-    if (session && session.mode === 'immersive-ar') {
-      scene.background = null;
-    } else {
-      scene.background = new THREE.Color('#050505');
-    }
+    scene.background = null;
   });
   return null;
 };
@@ -1263,7 +1264,7 @@ const VisualizerVR: React.FC<VisualizerVRProps> = ({ params, getAudioMetrics, se
   }, []);
 
   return (
-    <div className={`w-full h-full relative ${(params.arMode || params.arPortalMode) ? 'bg-transparent' : 'bg-black'}`} style={{ touchAction: 'none' }}>
+    <div className="w-full h-full relative bg-transparent" style={{ touchAction: 'none' }}>
       {params.showIndicators && (
         <div className="absolute top-4 left-4 z-50 flex gap-2">
           {!(params.arMode || params.arPortalMode) ? (
@@ -1295,6 +1296,7 @@ const VisualizerVR: React.FC<VisualizerVRProps> = ({ params, getAudioMetrics, se
       )}
 
       <Canvas 
+        gl={{ alpha: true }}
         camera={{ position: [0, 0, params.vrDistance], fov: 75, far: 10000 }}
         onPointerMissed={() => setMenuVisible(v => !v)}
       >

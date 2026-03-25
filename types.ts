@@ -1,6 +1,28 @@
 export type AutoPilotMode = 'drift' | 'harmonic' | 'genesis';
 export type GeometryRegime = 'primary' | 'reciprocal' | 'void';
-export type SacredGeometryMode = 'goldenSpiral' | 'flowerOfLife' | 'quantumWave' | 'torus';
+export type SacredGeometryMode = 
+  | 'goldenSpiral' 
+  | 'flowerOfLife' 
+  | 'quantumWave' 
+  | 'torus'
+  | 'metatron'
+  | 'merkaba'
+  | 'platonicSolids'
+  | 'sriYantra'
+  | 'cymatics'
+  | 'vectorEquilibrium'
+  | 'treeOfLife'
+  | 'yinYang'
+  | 'mandala1'
+  | 'mandala2'
+  | 'mandala3'
+  | 'holographicFractal'
+  | 'chakras'
+  | 'om'
+  | 'lotus'
+  | 'dharmaChakra';
+
+export type BackgroundMode = 'solid' | 'gradient' | 'liquid-rainbow' | 'crystal-bubbles' | 'organic-fade' | 'morphing-colors';
 
 export interface GeometryInfo {
   V: number; // Vertices
@@ -94,6 +116,15 @@ export interface VisualizerParams {
   arPortalFade: number;
   arPortalBending: number;
   
+  // Background Params
+  bgMode: BackgroundMode;
+  bgColor1: string;
+  bgColor2: string;
+  bgSpeed: number;
+  bgAnimatable: boolean;
+  bgVignette: boolean;
+  bgVignetteIntensity: number;
+  
   // UI Params
   showIndicators: boolean;
   menuTransparency: number;
@@ -152,7 +183,23 @@ export const DEFAULT_PARAMS: VisualizerParams = {
     goldenSpiral: { ...defaultSGSettings },
     flowerOfLife: { ...defaultSGSettings },
     quantumWave: { ...defaultSGSettings },
-    torus: { ...defaultSGSettings }
+    torus: { ...defaultSGSettings },
+    metatron: { ...defaultSGSettings },
+    merkaba: { ...defaultSGSettings },
+    platonicSolids: { ...defaultSGSettings },
+    sriYantra: { ...defaultSGSettings },
+    cymatics: { ...defaultSGSettings },
+    vectorEquilibrium: { ...defaultSGSettings },
+    treeOfLife: { ...defaultSGSettings },
+    yinYang: { ...defaultSGSettings },
+    mandala1: { ...defaultSGSettings },
+    mandala2: { ...defaultSGSettings },
+    mandala3: { ...defaultSGSettings },
+    holographicFractal: { ...defaultSGSettings },
+    chakras: { ...defaultSGSettings },
+    om: { ...defaultSGSettings },
+    lotus: { ...defaultSGSettings },
+    dharmaChakra: { ...defaultSGSettings }
   },
   sgShowNodes: true,
   sgDrawMode: 'layers',
@@ -185,6 +232,15 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   arPortalVanishingRadius: 1.0,
   arPortalFade: 1.0,
   arPortalBending: 0.0,
+  
+  // Background Params
+  bgMode: 'solid',
+  bgColor1: '#000000',
+  bgColor2: '#1a1a2e',
+  bgSpeed: 0.5,
+  bgAnimatable: true,
+  bgVignette: true,
+  bgVignetteIntensity: 0.8,
   
   showIndicators: true,
   menuTransparency: 0.8,
