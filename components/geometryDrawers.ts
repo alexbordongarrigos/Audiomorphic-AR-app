@@ -37,7 +37,7 @@ export const drawMetatron = (ctx: CanvasRenderingContext2D, cx: number, cy: numb
     // Draw circles at nodes
     nodes.forEach(n => {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, r * 0.3, 0, Math.PI*2);
+        ctx.arc(n.x, n.y, Math.max(0, r * 0.3), 0, Math.PI*2);
         if (bgOpacity > 0) ctx.fill();
         ctx.stroke();
     });
@@ -180,15 +180,15 @@ export const drawSriYantra = (ctx: CanvasRenderingContext2D, cx: number, cy: num
 
     // Bindu (Center point)
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.02, 0, Math.PI * 2);
+    ctx.arc(0, 0, Math.max(0, size * 0.02), 0, Math.PI * 2);
     ctx.fill();
 
     // Outer circles (Lotus petals representation)
     ctx.beginPath();
-    ctx.arc(0, 0, size * 1.1, 0, Math.PI * 2);
+    ctx.arc(0, 0, Math.max(0, size * 1.1), 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(0, 0, size * 1.3, 0, Math.PI * 2);
+    ctx.arc(0, 0, Math.max(0, size * 1.3), 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.restore();
@@ -343,7 +343,7 @@ export const drawTreeOfLife = (ctx: CanvasRenderingContext2D, cx: number, cy: nu
     // Draw nodes
     nodes.forEach(n => {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, scale * 0.3, 0, Math.PI*2);
+        ctx.arc(n.x, n.y, Math.max(0, scale * 0.3), 0, Math.PI*2);
         if (bgOpacity > 0) ctx.fill();
         ctx.stroke();
     });
@@ -361,36 +361,36 @@ export const drawYinYang = (ctx: CanvasRenderingContext2D, cx: number, cy: numbe
 
     // Outer circle
     ctx.beginPath();
-    ctx.arc(0, 0, size, 0, Math.PI * 2);
+    ctx.arc(0, 0, Math.max(0, size), 0, Math.PI * 2);
     ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity})`;
     ctx.stroke();
 
     // Yin (Dark/Bg)
     ctx.beginPath();
-    ctx.arc(0, 0, size, Math.PI * 0.5, Math.PI * 1.5, true);
-    ctx.arc(0, -size/2, size/2, Math.PI * 1.5, Math.PI * 0.5, false);
-    ctx.arc(0, size/2, size/2, Math.PI * 1.5, Math.PI * 0.5, true);
+    ctx.arc(0, 0, Math.max(0, size), Math.PI * 0.5, Math.PI * 1.5, true);
+    ctx.arc(0, -size/2, Math.max(0, size/2), Math.PI * 1.5, Math.PI * 0.5, false);
+    ctx.arc(0, size/2, Math.max(0, size/2), Math.PI * 1.5, Math.PI * 0.5, true);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${bgOpacity})`;
     ctx.fill();
     ctx.stroke();
 
     // Yang (Light/Line)
     ctx.beginPath();
-    ctx.arc(0, 0, size, Math.PI * 1.5, Math.PI * 0.5, true);
-    ctx.arc(0, size/2, size/2, Math.PI * 0.5, Math.PI * 1.5, false);
-    ctx.arc(0, -size/2, size/2, Math.PI * 0.5, Math.PI * 1.5, true);
+    ctx.arc(0, 0, Math.max(0, size), Math.PI * 1.5, Math.PI * 0.5, true);
+    ctx.arc(0, size/2, Math.max(0, size/2), Math.PI * 0.5, Math.PI * 1.5, false);
+    ctx.arc(0, -size/2, Math.max(0, size/2), Math.PI * 0.5, Math.PI * 1.5, true);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity})`;
     ctx.fill();
     ctx.stroke();
 
     // Inner dots
     ctx.beginPath();
-    ctx.arc(0, -size/2, size * 0.15, 0, Math.PI * 2);
+    ctx.arc(0, -size/2, Math.max(0, size * 0.15), 0, Math.PI * 2);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity})`;
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(0, size/2, size * 0.15, 0, Math.PI * 2);
+    ctx.arc(0, size/2, Math.max(0, size * 0.15), 0, Math.PI * 2);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${bgOpacity})`;
     ctx.fill();
 
@@ -433,11 +433,11 @@ export const drawMandala1 = (ctx: CanvasRenderingContext2D, cx: number, cy: numb
 
     // Inner circles
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.8, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, size * 0.8), 0, Math.PI*2);
     ctx.stroke();
     
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.6, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, size * 0.6), 0, Math.PI*2);
     ctx.stroke();
 
     // Lotus petals (16)
@@ -508,7 +508,7 @@ export const drawMandala3 = (ctx: CanvasRenderingContext2D, cx: number, cy: numb
         const size = r * 3 * Math.pow(0.7, i + (time % 1));
         
         ctx.beginPath();
-        ctx.arc(0, 0, size, 0, Math.PI*2);
+        ctx.arc(0, 0, Math.max(0, size), 0, Math.PI*2);
         
         // Opacity fades towards center
         ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity * (1 - i/maxCircles)})`;
@@ -517,7 +517,7 @@ export const drawMandala3 = (ctx: CanvasRenderingContext2D, cx: number, cy: numb
     
     // Intense center point
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.1 * (1 + vol), 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, r * 0.1 * (1 + vol)), 0, Math.PI*2);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, 100%, ${lineOpacity})`;
     ctx.fill();
 
@@ -611,7 +611,7 @@ export const drawChakras = (ctx: CanvasRenderingContext2D, cx: number, cy: numbe
         
         // Inner circle
         ctx.beginPath();
-        ctx.arc(0, 0, size * 0.3, 0, Math.PI*2);
+        ctx.arc(0, 0, Math.max(0, size * 0.3), 0, Math.PI*2);
         ctx.stroke();
         
         ctx.restore();
@@ -642,8 +642,8 @@ export const drawOm = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r:
     // Stylized Om symbol drawn with curves
     ctx.beginPath();
     // Left '3' shape (Waking & Dream states)
-    ctx.arc(-s*0.5, -s*0.5, s*0.5, Math.PI, Math.PI*2.5);
-    ctx.arc(-s*0.5, s*0.5, s*0.6, -Math.PI*0.5, Math.PI);
+    ctx.arc(-s*0.5, -s*0.5, Math.max(0, s*0.5), Math.PI, Math.PI*2.5);
+    ctx.arc(-s*0.5, s*0.5, Math.max(0, s*0.6), -Math.PI*0.5, Math.PI);
     
     // Right tail (Deep sleep)
     ctx.moveTo(-s*0.1, 0);
@@ -652,19 +652,19 @@ export const drawOm = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r:
 
     // Upper crescent (Maya/Illusion)
     ctx.beginPath();
-    ctx.arc(s*0.8, -s*1.2, s*0.6, Math.PI*0.2, Math.PI*0.8);
+    ctx.arc(s*0.8, -s*1.2, Math.max(0, s*0.6), Math.PI*0.2, Math.PI*0.8);
     ctx.stroke();
 
     // Bindu (Absolute state)
     ctx.beginPath();
-    ctx.arc(s*0.8, -s*1.8, s*0.15, 0, Math.PI*2);
+    ctx.arc(s*0.8, -s*1.8, Math.max(0, s*0.15), 0, Math.PI*2);
     ctx.fill();
     ctx.stroke();
 
     // Radiating sound waves
     for(let i=1; i<=3; i++) {
         ctx.beginPath();
-        ctx.arc(0, 0, r * 2 * i * (1 + vol*0.5), 0, Math.PI*2);
+        ctx.arc(0, 0, Math.max(0, r * 2 * i * (1 + vol*0.5)), 0, Math.PI*2);
         ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity * 0.3 / i})`;
         ctx.stroke();
     }
@@ -728,11 +728,11 @@ export const drawDharmaChakra = (ctx: CanvasRenderingContext2D, cx: number, cy: 
 
     // Outer rim
     ctx.beginPath();
-    ctx.arc(0, 0, size, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, size), 0, Math.PI*2);
     ctx.stroke();
     
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.9, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, size * 0.9), 0, Math.PI*2);
     ctx.stroke();
 
     // 8 Spokes (Noble Eightfold Path)
@@ -748,7 +748,7 @@ export const drawDharmaChakra = (ctx: CanvasRenderingContext2D, cx: number, cy: 
         
         // Decorative element on spoke
         ctx.beginPath();
-        ctx.arc(0, size * 0.5, size * 0.1, 0, Math.PI*2);
+        ctx.arc(0, size * 0.5, Math.max(0, size * 0.1), 0, Math.PI*2);
         if (bgOpacity > 0) ctx.fill();
         ctx.stroke();
         
@@ -757,15 +757,15 @@ export const drawDharmaChakra = (ctx: CanvasRenderingContext2D, cx: number, cy: 
 
     // Central hub
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.2, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, size * 0.2), 0, Math.PI*2);
     ctx.stroke();
     if (bgOpacity > 0) ctx.fill();
     
     // Inner swirl (Yin-Yang like)
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.1, 0, Math.PI, true);
-    ctx.arc(size*0.05, 0, size*0.05, Math.PI, 0, false);
-    ctx.arc(-size*0.05, 0, size*0.05, Math.PI, 0, true);
+    ctx.arc(0, 0, Math.max(0, size * 0.1), 0, Math.PI, true);
+    ctx.arc(size*0.05, 0, Math.max(0, size*0.05), Math.PI, 0, false);
+    ctx.arc(-size*0.05, 0, Math.max(0, size*0.05), Math.PI, 0, true);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity})`;
     ctx.fill();
 

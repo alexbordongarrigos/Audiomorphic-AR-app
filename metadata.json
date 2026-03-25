@@ -3,6 +3,7 @@
   "description": "A mathematical audio visualization tool that generates complex geometric patterns driven by real-time microphone input, relating spiral expansion to volume and rotation to frequency. Now in VR!",
   "requestFramePermissions": [
     "microphone",
-    "camera"
+    "camera",
+    "display-capture"
   ]
 }

@@ -75,6 +75,8 @@ export interface VisualizerParams {
   rootNote: number; // 0-11 (C, C#, D...) for harmonic calculations
   autoViscosity: number; // 0.0 (Water/Fast) to 1.0 (Honey/Slow) - Smoothness
   autoSpeed: number; // Speed of the base pattern drift
+  autoEmotionSensitivity: number; // Sensibilidad emocional
+  autoStyleFluidity: number; // Fluidez entre estilos inteligentes
   
   // Sacred Geometry Params (Genesis Mode)
   spiralResonanceModes: SacredGeometryMode[]; // For the spiral (Genesis only)
@@ -118,8 +120,7 @@ export interface VisualizerParams {
   
   // Background Params
   bgMode: BackgroundMode;
-  bgColor1: string;
-  bgColor2: string;
+  bgColors: string[];
   bgSpeed: number;
   bgAnimatable: boolean;
   bgVignette: boolean;
@@ -175,6 +176,8 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   rootNote: 0,
   autoViscosity: 0.963, // Viscosidad
   autoSpeed: 1.0,     // Velocidad Deriva
+  autoEmotionSensitivity: 0.5,
+  autoStyleFluidity: 0.5,
 
   spiralResonanceModes: ['flowerOfLife'],
   sacredGeometryEnabled: false,
@@ -235,8 +238,7 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   
   // Background Params
   bgMode: 'solid',
-  bgColor1: '#000000',
-  bgColor2: '#1a1a2e',
+  bgColors: ['#000000', '#1a1a2e'],
   bgSpeed: 0.5,
   bgAnimatable: true,
   bgVignette: true,

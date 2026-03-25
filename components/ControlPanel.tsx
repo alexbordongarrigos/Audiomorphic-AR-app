@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings, DEFAULT_PARAMS } from '../types';
-import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload } from 'lucide-react';
+import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings, DEFAULT_PARAMS, AutoPilotMode, BackgroundMode, GeometryInfo } from '../types';
+import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload, Heart } from 'lucide-react';
 
 interface ControlPanelProps {
   params: VisualizerParams;
@@ -42,14 +42,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart' | 'dj'>('none');
   const [autoRandomInterval, setAutoRandomInterval] = useState<number>(10);
   const [autoRandomOnEmotionChange, setAutoRandomOnEmotionChange] = useState<boolean>(false);
+  const [autoEmotionSensitivity, setAutoEmotionSensitivity] = useState<number>(50);
+  const [autoStyleFluidity, setAutoStyleFluidity] = useState<number>(50);
   const lastMetricsRef = useRef({ volume: 0, frequency: 0, time: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paramsRef = useRef(params);
-  const tweenAnimRef = useRef<number>();
+  const tweenAnimRef = useRef<number>(0);
 
   useEffect(() => {
     paramsRef.current = params;
   }, [params]);
+
+  const handleAutoRandomModeChange = (mode: 'none' | 'random' | 'smart' | 'dj') => {
+    setAutoRandomMode(mode);
+    if (mode !== 'none') {
+      setAutoRandomOnEmotionChange(true);
+    }
+  };
 
   const tweenParams = useCallback((targetParams: Partial<VisualizerParams>, duration: number = 2000) => {
     if (tweenAnimRef.current) cancelAnimationFrame(tweenAnimRef.current);
@@ -72,7 +81,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           const startVal = startParams[k];
           
           if (typeof targetVal === 'number' && typeof startVal === 'number') {
-            (next as any)[k] = startVal + (targetVal - startVal) * easeProgress;
+            (next as any)[k] = (startVal as number) + ((targetVal as number) - (startVal as number)) * easeProgress;
           } else if (typeof targetVal === 'string' && targetVal.startsWith('#') && typeof startVal === 'string' && startVal.startsWith('#')) {
             if (progress === 1) {
               (next as any)[k] = targetVal;
@@ -89,6 +98,32 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               const b = Math.round(b1 + (b2 - b1) * easeProgress);
               
               (next as any)[k] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+          } else if (Array.isArray(targetVal) && Array.isArray(startVal)) {
+            if (progress === 1) {
+              (next as any)[k] = targetVal;
+            } else {
+              const newArray = [];
+              const maxLen = Math.max(targetVal.length, startVal.length);
+              for (let i = 0; i < maxLen; i++) {
+                const tv = targetVal[i] || targetVal[targetVal.length - 1] || '#000000';
+                const sv = startVal[i] || startVal[startVal.length - 1] || '#000000';
+                if (typeof tv === 'string' && tv.startsWith('#') && typeof sv === 'string' && sv.startsWith('#')) {
+                  const r1 = parseInt(sv.slice(1, 3), 16) || 0;
+                  const g1 = parseInt(sv.slice(3, 5), 16) || 0;
+                  const b1 = parseInt(sv.slice(5, 7), 16) || 0;
+                  const r2 = parseInt(tv.slice(1, 3), 16) || 0;
+                  const g2 = parseInt(tv.slice(3, 5), 16) || 0;
+                  const b2 = parseInt(tv.slice(5, 7), 16) || 0;
+                  const r = Math.round(r1 + (r2 - r1) * easeProgress);
+                  const g = Math.round(g1 + (g2 - g1) * easeProgress);
+                  const b = Math.round(b1 + (b2 - b1) * easeProgress);
+                  newArray.push(`#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`);
+                } else {
+                  newArray.push(tv);
+                }
+              }
+              (next as any)[k] = newArray;
             }
           } else {
             if (progress > 0.5) {
@@ -230,16 +265,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       targetParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
       
       if (mood === 'bass') {
-        targetParams.bgColor1 = `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`;
-        targetParams.bgColor2 = `#000000`;
+        targetParams.bgColors = [
+          `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`,
+          `#000000`
+        ];
         targetParams.bgSpeed = 0.1 + Math.random() * 0.4;
       } else if (mood === 'treble') {
-        targetParams.bgColor1 = `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`;
-        targetParams.bgColor2 = `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`;
+        targetParams.bgColors = [
+          `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`,
+          `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`
+        ];
         targetParams.bgSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.0 + Math.random() * 1.0;
       } else {
-        targetParams.bgColor1 = `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`;
-        targetParams.bgColor2 = `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`;
+        targetParams.bgColors = [
+          `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`,
+          `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`
+        ];
         targetParams.bgSpeed = 0.4 + Math.random() * 0.6;
       }
       targetParams.bgVignetteIntensity = isDJ ? 0.6 + Math.random() * 0.4 : 0.4 + Math.random() * 0.5;
@@ -260,8 +301,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       genBg();
     }
 
-    tweenParams(targetParams, partial ? 3000 : 1500);
-  }, [tweenParams, getAudioMetrics, audioActive]);
+    const fluidityFactor = autoStyleFluidity / 100;
+    
+    // Base duration depends on partial update and mood
+    let baseDuration = partial ? 3000 : 1500;
+    if (mood === 'bass') baseDuration *= 1.5; // Slower, heavier transitions for bass
+    else if (mood === 'treble') baseDuration *= 0.7; // Faster, snappier transitions for treble
+    
+    // Calculate final duration using fluidity factor
+    // 0% fluidity = very fast (e.g. 100ms)
+    // 100% fluidity = very slow (e.g. up to 8000ms)
+    const tweenDuration = 100 + (baseDuration * 3 * fluidityFactor);
+
+    tweenParams(targetParams, tweenDuration);
+  }, [tweenParams, getAudioMetrics, audioActive, autoStyleFluidity]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -289,11 +342,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         const deltaV = metrics.volume - last.volume;
         const deltaF = Math.abs(metrics.frequency - last.frequency);
         
-        if (now - last.time > 2000) {
-          if (deltaV > 0.4) {
+        const sensitivityFactor = autoEmotionSensitivity / 100;
+        const thresholdV = 0.8 - (0.7 * sensitivityFactor);
+        const thresholdF = 0.5 - (0.45 * sensitivityFactor);
+        const cooldown = 4000 - (3500 * sensitivityFactor);
+        
+        if (now - last.time > cooldown) {
+          if (deltaV > thresholdV) {
             generateRandomParams(autoRandomMode as any, false);
             lastMetricsRef.current = { ...metrics, time: now };
-          } else if (deltaF > 0.25) {
+          } else if (deltaF > thresholdF) {
             generateRandomParams(autoRandomMode as any, true);
             lastMetricsRef.current = { ...metrics, time: now };
           }
@@ -311,7 +369,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [autoRandomMode, autoRandomOnEmotionChange, audioActive, params.sensitivity, params.freqRange, generateRandomParams, getAudioMetrics]);
+  }, [autoRandomMode, autoRandomOnEmotionChange, audioActive, params.sensitivity, params.freqRange, generateRandomParams, getAudioMetrics, autoEmotionSensitivity]);
 
   const handleInstallClick = () => {
     window.open("https://drive.google.com/drive/folders/1bZ8yvbWr7r3eJUdKIQCSSuu-p398mAkn?usp=sharing", "_blank");
@@ -386,8 +444,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         setParams(prev => ({
           ...prev,
           bgMode: modes[Math.floor(Math.random() * modes.length)],
-          bgColor1: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
-          bgColor2: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+          bgColors: [
+            `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+            `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`
+          ],
           bgSpeed: Math.random() * 2,
           bgVignetteIntensity: Math.random()
         }));
@@ -431,7 +491,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         }));
         break;
       case 'spiralResonance':
-        const resModes = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'seedOfLife', 'treeOfLife', 'vesicaPiscis', 'fibonacci', 'enneagram', 'hexagram', 'pentagram', 'heptagram', 'octagram', 'nonagram', 'decagram'];
+        const resModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
         const randomResModes = resModes.filter(() => Math.random() > 0.7);
         setParams(prev => ({
           ...prev,
@@ -439,7 +499,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         }));
         break;
       case 'sacredGeometry':
-        const sgModes = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'seedOfLife', 'treeOfLife', 'vesicaPiscis', 'fibonacci', 'enneagram', 'hexagram', 'pentagram', 'heptagram', 'octagram', 'nonagram', 'decagram'];
+        const sgModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
         const randomSgModes = sgModes.filter(() => Math.random() > 0.7);
         setParams(prev => ({
           ...prev,
@@ -613,7 +673,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         <input
           type="number"
           step="any"
-          value={typeof params[key] === 'number' ? Number(params[key]).toFixed(3) : params[key] as number}
+          value={typeof params[key] === 'number' ? Number(params[key]).toFixed(3) : params[key] as unknown as number}
           onChange={(e) => handleChange(key, parseFloat(e.target.value))}
           disabled={disabled}
           className="font-mono text-xs text-cyan-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-cyan-400 outline-none text-right w-16 sm:w-20 hover:border-white/30 transition-all shadow-inner shrink-0"
@@ -672,7 +732,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
           min={min}
           max={max}
           step={step}
-          value={value}
+          value={value as number}
           onChange={(e) => {
             const val = parseFloat(e.target.value);
             setParams(prev => ({
@@ -1201,6 +1261,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
                       {renderControl("Viscosidad", "autoViscosity", 0.01, 0.999, 0.001, <Droplets className="w-4 h-4 icon-neon"/>)}
                       {params.autoPilotMode === 'drift' && renderControl("Velocidad Deriva", "autoSpeed", 0.01, 1.0, 0.01, <Wind className="w-4 h-4 icon-neon"/>)}
+                      {renderControl("Sensibilidad Emocional", "autoEmotionSensitivity", 0.0, 1.0, 0.01, <Heart className="w-4 h-4 icon-neon"/>)}
+                      {renderControl("Fluidez de Estilo", "autoStyleFluidity", 0.0, 1.0, 0.01, <Palette className="w-4 h-4 icon-neon"/>)}
                   </div>
                )}
             </div>
@@ -1755,14 +1817,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
-                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate">Color 1</label>
-                  <input type="color" value={params.bgColor1} onChange={(e) => handleChange('bgColor1', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent border-none" />
+              <div className="mb-4 bg-black/20 p-4 rounded-2xl border border-white/5">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-xs uppercase tracking-wider text-gray-300 font-semibold">Colores Personalizables</label>
+                  <button 
+                    onClick={() => handleChange('bgColors', [...(params.bgColors || []), '#ffffff'])}
+                    className="text-cyan-400 hover:text-cyan-300 text-xs px-2 py-1 bg-cyan-500/10 rounded"
+                  >
+                    + Añadir
+                  </button>
                 </div>
-                <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col gap-2">
-                  <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 font-semibold truncate">Color 2</label>
-                  <input type="color" value={params.bgColor2} onChange={(e) => handleChange('bgColor2', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent border-none" />
+                <div className="grid grid-cols-4 gap-2">
+                  {(params.bgColors || []).map((color, idx) => (
+                    <div key={idx} className="relative group">
+                      <input 
+                        type="color" 
+                        value={color} 
+                        onChange={(e) => {
+                          const newColors = [...(params.bgColors || [])];
+                          newColors[idx] = e.target.value;
+                          handleChange('bgColors', newColors);
+                        }} 
+                        className="w-full h-8 rounded cursor-pointer bg-transparent border-none" 
+                      />
+                      {(params.bgColors || []).length > 1 && (
+                        <button 
+                          onClick={() => {
+                            const newColors = (params.bgColors || []).filter((_, i) => i !== idx);
+                            handleChange('bgColors', newColors);
+                          }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1944,7 +2034,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                     <label className="text-xs text-gray-300">Modo Automático</label>
                     <select
                       value={autoRandomMode}
-                      onChange={(e) => setAutoRandomMode(e.target.value as any)}
+                      onChange={(e) => handleAutoRandomModeChange(e.target.value as any)}
                       className="bg-black/50 border border-white/10 text-cyan-300 text-xs rounded-lg p-2 outline-none"
                     >
                       <option value="none">Apagado</option>
@@ -1957,7 +2047,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   {autoRandomMode !== 'none' && (
                     <>
                       <div className="flex items-center justify-between">
-                        <label className="text-xs text-gray-300">Detectar Emoción/Estilo</label>
+                        <label className="text-xs text-gray-300">Detección de Emoción/Estilo</label>
                         <input
                           type="checkbox"
                           checked={autoRandomOnEmotionChange}
@@ -1965,6 +2055,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                           className="w-4 h-4 accent-cyan-500"
                         />
                       </div>
+
+                      {autoRandomOnEmotionChange && (
+                        <div className="space-y-4 mt-4">
+                          <div className="flex flex-col items-center">
+                            <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                              <span>Sensibilidad a Emoción</span>
+                              <span className="text-cyan-400">{autoEmotionSensitivity}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={autoEmotionSensitivity}
+                              onChange={(e) => setAutoEmotionSensitivity(Number(e.target.value))}
+                              className="w-full accent-cyan-500"
+                            />
+                          </div>
+                          
+                          <div className="flex flex-col items-center">
+                            <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                              <span>Fluidez de Estilo</span>
+                              <span className="text-cyan-400">{autoStyleFluidity}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={autoStyleFluidity}
+                              onChange={(e) => setAutoStyleFluidity(Number(e.target.value))}
+                              className="w-full accent-cyan-500"
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       {!autoRandomOnEmotionChange && (
                         <div>

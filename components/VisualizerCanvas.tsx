@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { VisualizerParams, DEFAULT_PARAMS } from '../types';
+import { VisualizerParams, DEFAULT_PARAMS, SacredGeometrySettings } from '../types';
 import {
   drawMetatron,
   drawMerkaba,
@@ -76,7 +76,7 @@ const drawSeedOfLife = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r
 
     const circle = (x: number, y: number, rad: number) => {
         ctx.beginPath(); 
-        ctx.arc(x, y, rad, 0, Math.PI*2); 
+        ctx.arc(x, y, Math.max(0, rad), 0, Math.PI*2); 
         ctx.stroke(); 
         if (bgOpacity > 0) ctx.fill();
     };
@@ -95,7 +95,7 @@ const drawSeedOfLife = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r
     
     // Bounding circle
     ctx.beginPath();
-    ctx.arc(0, 0, r * 3, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, r * 3), 0, Math.PI*2);
     ctx.strokeStyle = `hsla(${hue}, ${sat}%, ${light}%, ${lineOpacity * 0.5})`;
     ctx.stroke();
 
@@ -123,14 +123,14 @@ const drawTorus = (ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
         const squeeze = Math.abs(Math.cos(time * 0.5 + i * 0.1));
         
         ctx.beginPath();
-        ctx.ellipse(xOffset, yOffset, tubeRadius, tubeRadius * (0.2 + squeeze * 0.8), a + time, 0, Math.PI*2);
+        ctx.ellipse(xOffset, yOffset, Math.max(0, tubeRadius), Math.max(0, tubeRadius * (0.2 + squeeze * 0.8)), a + time, 0, Math.PI*2);
         if (bgOpacity > 0) ctx.fill();
         ctx.stroke();
     }
     
     // Core energy line
     ctx.beginPath();
-    ctx.arc(0, 0, mainRadius, 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, mainRadius), 0, Math.PI*2);
     ctx.strokeStyle = `hsla(${hue}, ${sat}%, 100%, ${lineOpacity})`;
     ctx.lineWidth = (1 + vol * 2) * thickness;
     ctx.stroke();
@@ -149,7 +149,7 @@ const drawQuantumCloud = (ctx: CanvasRenderingContext2D, cx: number, cy: number,
         const radius = r * (i/layers) * (1 + Math.sin(time * 2 + i) * 0.15 * layerVol);
         ctx.fillStyle = `hsla(${hue}, ${sat}%, ${light}%, ${bgOpacity * 0.8 * (1 - i/layers)})`;
         ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI*2);
+        ctx.arc(0, 0, Math.max(0, radius), 0, Math.PI*2);
         if (bgOpacity > 0) ctx.fill();
     }
     
@@ -175,7 +175,7 @@ const drawQuantumCloud = (ctx: CanvasRenderingContext2D, cx: number, cy: number,
     
     // Inner core
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.2 * (1 + vol), 0, Math.PI*2);
+    ctx.arc(0, 0, Math.max(0, r * 0.2 * (1 + vol)), 0, Math.PI*2);
     ctx.fillStyle = `hsla(${hue}, ${sat}%, 100%, ${bgOpacity})`;
     if (bgOpacity > 0) ctx.fill();
 
@@ -261,7 +261,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
     let animationFrameId: number;
 
     const render = () => {
-      const ctx = canvas.getContext('2d', { alpha: false });
+      const ctx = canvas.getContext('2d');
       if (!ctx) {
          animationFrameId = requestAnimationFrame(render);
          return;
@@ -338,7 +338,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   thickness: Math.max(0.05, thickness),
                   flowSpeed,
                   audioReactivity
-              };
+              } as SacredGeometrySettings;
           });
       }
 

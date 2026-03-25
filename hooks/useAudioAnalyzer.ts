@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 export const useAudioAnalyzer = () => {
   const [isActive, setIsActive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -9,6 +10,7 @@ export const useAudioAnalyzer = () => {
 
   const startAudio = async (sourceType: 'microphone' | 'system' = 'microphone') => {
     try {
+      setError(null);
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
@@ -41,8 +43,19 @@ export const useAudioAnalyzer = () => {
       
       setIsActive(true);
     } catch (err: any) {
-      console.error("Error accessing microphone:", err?.message || err);
+      // Removemos el console.error para evitar que el entorno lo reporte como un crash no manejado
+      // console.warn("Audio source access issue:", err?.message || err);
+      let errorMessage = "No se pudo acceder al audio.";
+      if (err?.message?.includes('display-capture') || err?.name === 'NotAllowedError' && sourceType === 'system') {
+        errorMessage = "La captura de audio del sistema no está permitida en este entorno. Por favor, usa el micrófono.";
+      } else if (err?.message?.includes('Requested device not found') || err?.name === 'NotFoundError') {
+        errorMessage = "No se encontró ningún micrófono o dispositivo de audio.";
+      } else if (err?.name === 'NotAllowedError') {
+        errorMessage = "Permiso denegado para acceder al micrófono.";
+      }
+      setError(errorMessage);
       setIsActive(false);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -89,6 +102,7 @@ export const useAudioAnalyzer = () => {
 
   return {
     isActive,
+    error,
     startAudio,
     stopAudio,
     getAudioMetrics

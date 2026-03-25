@@ -93,7 +93,7 @@ const calculateHarmonicGeometry = (V: number, E: number): {
 
 const App: React.FC = () => {
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
-  const { isActive, startAudio, stopAudio, getAudioMetrics } = useAudioAnalyzer();
+  const { isActive, error, startAudio, stopAudio, getAudioMetrics } = useAudioAnalyzer();
   const [controlsVisible, setControlsVisible] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -164,7 +164,8 @@ const App: React.FC = () => {
         
         // 1. Determine Stage based on Energy
         // Combine Volume (Matter/Density) and Frequency (Vibration/Spirit)
-        const energy = volume + (frequency * 0.4);
+        const emotionSens = params.autoEmotionSensitivity ?? 0.5;
+        const energy = (volume + (frequency * 0.4)) * (0.5 + emotionSens);
         
         // Map energy to Genesis progression
         let stageIdx = 0;
@@ -188,9 +189,7 @@ const App: React.FC = () => {
 
         // 3. APPLY TO TARGETS
         // Audio reactivity modulates the strict math slightly (Breathing)
-        // Since base K is now very close to 1.0 (e.g. 0.998), adding volume pushes it > 1.0 (Expansion)
-        // This creates a "breathing" effect where the spiral grows with sound and relaxes with silence.
-        const breathing = 1.0 + (volume * 0.015); 
+        const breathing = 1.0 + (volume * 0.015 * (emotionSens * 2)); 
 
         p.targetPsi = math.psi;
         p.targetK = math.k * breathing;
@@ -198,8 +197,6 @@ const App: React.FC = () => {
         p.targetZ0_i = 0;
 
         // Color based on Regime
-        // Primary = Stable = Blues/Greens/Golds
-        // Reciprocal = Tense = Reds/Purples/Oranges
         if (math.regime === 'primary') {
              p.targetHue = 200 - (p.genesisTargetStage * 10); // Cool colors
         } else if (math.regime === 'reciprocal') {
@@ -221,8 +218,8 @@ const App: React.FC = () => {
       } 
       // --- HARMONIC MODE (Musical Geometry) ---
       else if (params.autoPilotMode === 'harmonic') {
+         const emotionSens = params.autoEmotionSensitivity ?? 0.5;
          // Map freq to notes, then to polygons per the Treatise
-         // For now, simpler mapping:
          const rawNote = Math.floor(frequency * 36); 
          const noteIndex = rawNote % 12;
          const interval = Math.abs(noteIndex - params.rootNote) % 12;
@@ -241,7 +238,7 @@ const App: React.FC = () => {
          const math = calculateHarmonicGeometry(V, E);
          
          // Harmonic breathing
-         const breathing = 1.0 + (volume * 0.012); 
+         const breathing = 1.0 + (volume * 0.012 * (emotionSens * 2)); 
 
          p.targetPsi = math.psi;
          p.targetK = math.k * breathing;
@@ -255,24 +252,47 @@ const App: React.FC = () => {
       } 
       // --- DRIFT MODE ---
       else {
-        // ... existing drift logic ...
-        const isBeat = volume > 0.40;
-        if (isBeat && (now - p.lastBeatTime > 2500)) {
+        const emotionSens = params.autoEmotionSensitivity ?? 0.5;
+        const fluidity = params.autoStyleFluidity ?? 0.5;
+        const isBeat = volume > (0.6 - (emotionSens * 0.4)); // Sensibilidad al beat
+        
+        // El tiempo entre cambios aleatorios depende de la fluidez
+        const beatCooldown = 3000 - (fluidity * 2000); 
+
+        if (isBeat && (now - p.lastBeatTime > beatCooldown)) {
           p.lastBeatTime = now;
-          p.targetPsi = (Math.random() * Math.PI);
+          
+          // Cambios aleatorios en múltiples parámetros basados en la fluidez
+          p.targetPsi = (Math.random() * Math.PI * 2);
+          
+          if (Math.random() < fluidity) {
+             p.targetK = DEFAULT_PARAMS.k + (Math.random() * 0.02 - 0.01) * emotionSens;
+          }
+          
+          if (Math.random() < fluidity * 0.5) {
+             p.targetZ0_r = (Math.random() * 0.5 - 0.25) * emotionSens;
+             p.targetZ0_i = (Math.random() * 0.5 - 0.25) * emotionSens;
+          }
         }
-        // Mantener la continuidad de la espiral sin que se adapte al volumen base
-        p.targetK = DEFAULT_PARAMS.k; 
-        p.targetPsi += (frequency * 0.0002);
-        p.targetHue = (p.currentParams.baseHue + 0.1) % 360;
-        p.targetZ0_r = 0;
-        p.targetZ0_i = 0;
+        
+        // Si no hay beat, tiende a volver a la normalidad o deriva suavemente
+        if (now - p.lastBeatTime > beatCooldown * 2) {
+           p.targetK = lerp(p.targetK, DEFAULT_PARAMS.k, 0.01);
+           p.targetZ0_r = lerp(p.targetZ0_r, 0, 0.01);
+           p.targetZ0_i = lerp(p.targetZ0_i, 0, 0.01);
+        }
+
+        p.targetPsi += (frequency * 0.0005 * (0.5 + emotionSens));
+        p.targetHue = (p.currentParams.baseHue + (0.2 + fluidity * 0.5) * (0.5 + emotionSens)) % 360;
       }
 
       // --- PHYSICS ---
       const viscosity = params.autoViscosity ?? 0.96;
-      let alpha = (1 - viscosity) * 0.05;
-      if (volume > 0.3) alpha *= 1.2;
+      const fluidity = params.autoStyleFluidity ?? 0.5;
+      const emotionSens = params.autoEmotionSensitivity ?? 0.5;
+      
+      let alpha = (1 - viscosity) * 0.05 * (0.5 + fluidity * 1.5);
+      if (volume > 0.3) alpha *= (1.0 + emotionSens);
 
       p.currentParams.k = lerp(p.currentParams.k, p.targetK, alpha);
       p.currentParams.psi = lerpAngle(p.currentParams.psi, p.targetPsi, alpha);
@@ -347,6 +367,13 @@ const App: React.FC = () => {
              </div>
            )}
       </div>
+      )}
+
+      {error && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/80 border border-red-500 text-red-100 px-6 py-3 rounded-lg shadow-lg backdrop-blur-md text-sm font-mono flex items-center gap-3">
+          <span className="text-xl">⚠️</span>
+          {error}
+        </div>
       )}
 
       {!(params.vrMode) && (

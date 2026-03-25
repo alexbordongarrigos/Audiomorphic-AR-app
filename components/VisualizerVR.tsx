@@ -7,7 +7,7 @@ import { StereoEffect } from 'three-stdlib';
 import { EffectComposer, Bloom, Noise, HueSaturation, Vignette, Glitch, ChromaticAberration, ColorAverage, DepthOfField } from '@react-three/postprocessing';
 import { BlendFunction, GlitchMode } from 'postprocessing';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-import { VisualizerParams, DEFAULT_PARAMS } from '../types';
+import { VisualizerParams, DEFAULT_PARAMS, SacredGeometrySettings } from '../types';
 import ControlPanel from './ControlPanel';
 
 const store = createXRStore();
@@ -472,7 +472,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
                 thickness: Math.max(0.05, thickness),
                 flowSpeed,
                 audioReactivity
-            };
+            } as SacredGeometrySettings;
         });
     }
 
@@ -862,7 +862,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
           <pointsMaterial size={params.vrThickness * 0.1} vertexColors transparent opacity={params.trail} sizeAttenuation={true} />
         </points>
       ) : (
-        <line ref={lineRef}>
+        <line ref={lineRef as any}>
           <bufferGeometry ref={geometryRef}>
             <bufferAttribute
               attach="attributes-position"
@@ -904,7 +904,7 @@ const Spiral3D = ({ params, getAudioMetrics }: { params: VisualizerParams, getAu
 };
 
 // VR HUD Menu that follows the camera
-const VRMenu = ({ params, setParams, audioActive, toggleAudio, visible }: any) => {
+const VRMenu = ({ params, setParams, audioActive, toggleAudio, visible, getAudioMetrics }: any) => {
   const { camera } = useThree();
   const groupRef = useRef<THREE.Group>(null);
 
@@ -936,6 +936,7 @@ const VRMenu = ({ params, setParams, audioActive, toggleAudio, visible }: any) =
             setParams={setParams} 
             audioActive={audioActive} 
             toggleAudio={toggleAudio} 
+            getAudioMetrics={getAudioMetrics}
           />
         </div>
       </Html>
@@ -1176,7 +1177,7 @@ const AREffects = ({ filter, intensity, getAudioMetrics }: { filter: string, int
   if (filter === 'none') return null;
 
   return (
-    <EffectComposer disableNormalPass={false}>
+    <EffectComposer>
       {filter === 'psychedelic' && (
         <>
           <HueSaturation ref={hueRef} hue={Math.PI * intensity} saturation={intensity * 2} />

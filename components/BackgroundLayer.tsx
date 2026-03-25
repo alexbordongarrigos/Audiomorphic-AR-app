@@ -9,7 +9,7 @@ interface BackgroundLayerProps {
 export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAudioMetrics }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timeRef = useRef(0);
-  const reqRef = useRef<number>();
+  const reqRef = useRef<number>(0);
   const bubblesRef = useRef(Array.from({ length: 30 }).map(() => ({
     x: Math.random() * window.innerWidth,
     y: Math.random() * window.innerHeight,
@@ -42,9 +42,11 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
 
       ctx.clearRect(0, 0, w, h);
 
+      const bgColors = params.bgColors || ['#000000', '#1a1a2e'];
+
       // Base background
       if (params.bgMode === 'solid') {
-        ctx.fillStyle = params.bgColor1;
+        ctx.fillStyle = bgColors[0] || '#000000';
         ctx.fillRect(0, 0, w, h);
       } else if (params.bgMode === 'gradient') {
         const grad = ctx.createLinearGradient(
@@ -52,8 +54,9 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
           params.bgAnimatable ? w * Math.cos(t) : w, 
           params.bgAnimatable ? h * Math.sin(t) : h
         );
-        grad.addColorStop(0, params.bgColor1);
-        grad.addColorStop(1, params.bgColor2);
+        bgColors.forEach((color, i) => {
+          grad.addColorStop(i / Math.max(1, bgColors.length - 1), color);
+        });
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
       } else if (params.bgMode === 'liquid-rainbow') {
@@ -65,7 +68,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
           }
         }
       } else if (params.bgMode === 'crystal-bubbles') {
-        ctx.fillStyle = params.bgColor1;
+        ctx.fillStyle = bgColors[0] || '#000000';
         ctx.fillRect(0, 0, w, h);
         
         bubblesRef.current.forEach(b => {
@@ -76,28 +79,30 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
           if (b.y < -b.r) b.y = h + b.r;
           if (b.y > h + b.r) b.y = -b.r;
 
-          const grad = ctx.createRadialGradient(b.x - b.r*0.3, b.y - b.r*0.3, b.r*0.1, b.x, b.y, b.r);
+          const grad = ctx.createRadialGradient(b.x - b.r*0.3, b.y - b.r*0.3, Math.max(0, b.r*0.1), b.x, b.y, Math.max(0, b.r));
           grad.addColorStop(0, `hsla(${b.hue + t*50}, 80%, 80%, 0.8)`);
           grad.addColorStop(1, `hsla(${b.hue + t*50}, 80%, 20%, 0.1)`);
           
           ctx.beginPath();
-          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.arc(b.x, b.y, Math.max(0, b.r), 0, Math.PI * 2);
           ctx.fillStyle = grad;
           ctx.fill();
           
           // Reflection
           ctx.beginPath();
-          ctx.arc(b.x - b.r*0.3, b.y - b.r*0.3, b.r*0.2, 0, Math.PI * 2);
+          ctx.arc(b.x - b.r*0.3, b.y - b.r*0.3, Math.max(0, b.r*0.2), 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
           ctx.fill();
         });
       } else if (params.bgMode === 'organic-fade') {
-        const r1 = parseInt(params.bgColor1.slice(1, 3), 16);
-        const g1 = parseInt(params.bgColor1.slice(3, 5), 16);
-        const b1 = parseInt(params.bgColor1.slice(5, 7), 16);
-        const r2 = parseInt(params.bgColor2.slice(1, 3), 16);
-        const g2 = parseInt(params.bgColor2.slice(3, 5), 16);
-        const b2 = parseInt(params.bgColor2.slice(5, 7), 16);
+        const c1 = bgColors[0] || '#000000';
+        const c2 = bgColors[1] || '#1a1a2e';
+        const r1 = parseInt(c1.slice(1, 3), 16) || 0;
+        const g1 = parseInt(c1.slice(3, 5), 16) || 0;
+        const b1 = parseInt(c1.slice(5, 7), 16) || 0;
+        const r2 = parseInt(c2.slice(1, 3), 16) || 0;
+        const g2 = parseInt(c2.slice(3, 5), 16) || 0;
+        const b2 = parseInt(c2.slice(5, 7), 16) || 0;
         
         const mix = (Math.sin(t) + 1) / 2;
         const r = Math.round(r1 * mix + r2 * (1 - mix));
@@ -111,9 +116,14 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
           w/2 + Math.cos(t*0.5)*w*0.2, h/2 + Math.sin(t*0.7)*h*0.2, 0,
           w/2, h/2, Math.max(w, h)
         );
-        grad.addColorStop(0, `hsl(${(t*20)%360}, 70%, 20%)`);
-        grad.addColorStop(0.5, `hsl(${((t*20)+120)%360}, 70%, 15%)`);
-        grad.addColorStop(1, `hsl(${((t*20)+240)%360}, 70%, 10%)`);
+        bgColors.forEach((color, i) => {
+          grad.addColorStop(i / Math.max(1, bgColors.length - 1), color);
+        });
+        if (bgColors.length === 0) {
+          grad.addColorStop(0, `hsl(${(t*20)%360}, 70%, 20%)`);
+          grad.addColorStop(0.5, `hsl(${((t*20)+120)%360}, 70%, 15%)`);
+          grad.addColorStop(1, `hsl(${((t*20)+240)%360}, 70%, 10%)`);
+        }
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
       }
@@ -136,7 +146,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({ params, getAud
       window.removeEventListener('resize', resize);
       if (reqRef.current) cancelAnimationFrame(reqRef.current);
     };
-  }, [params.bgMode, params.bgColor1, params.bgColor2, params.bgSpeed, params.bgAnimatable, params.bgVignette, params.bgVignetteIntensity, params.sensitivity, params.freqRange, getAudioMetrics]);
+  }, [params.bgMode, params.bgColors, params.bgSpeed, params.bgAnimatable, params.bgVignette, params.bgVignetteIntensity, params.sensitivity, params.freqRange, getAudioMetrics]);
 
   return (
     <canvas
