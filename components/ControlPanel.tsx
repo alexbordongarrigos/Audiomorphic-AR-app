@@ -39,183 +39,236 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [showRandomizerMenu, setShowRandomizerMenu] = useState(false);
-  const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart'>('none');
+  const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart' | 'dj'>('none');
   const [autoRandomInterval, setAutoRandomInterval] = useState<number>(10);
   const [autoRandomOnEmotionChange, setAutoRandomOnEmotionChange] = useState<boolean>(false);
-  const lastEmotionRef = useRef<number>(0);
+  const lastMetricsRef = useRef({ volume: 0, frequency: 0, time: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const paramsRef = useRef(params);
+  const tweenAnimRef = useRef<number>();
 
-  const generateRandomParams = useCallback((isSmart: boolean) => {
-    setParams(prev => {
-      const newParams = { ...prev };
+  useEffect(() => {
+    paramsRef.current = params;
+  }, [params]);
+
+  const tweenParams = useCallback((targetParams: Partial<VisualizerParams>, duration: number = 2000) => {
+    if (tweenAnimRef.current) cancelAnimationFrame(tweenAnimRef.current);
+    
+    const startTime = Date.now();
+    const startParams = { ...paramsRef.current };
+    
+    const animate = () => {
+      const now = Date.now();
+      let progress = (now - startTime) / duration;
+      if (progress > 1) progress = 1;
       
-      const metrics = getAudioMetrics(prev.sensitivity, prev.freqRange);
-      const hasAudio = audioActive && metrics.volume > 0.01;
+      const easeProgress = -(Math.cos(Math.PI * progress) - 1) / 2;
       
-      // Determine mood based on audio (if smart) or randomly
-      let mood = 'balanced';
-      if (isSmart && hasAudio) {
-        if (metrics.frequency < 0.3) mood = 'bass';
-        else if (metrics.frequency > 0.6) mood = 'treble';
-        else mood = 'mid';
-      } else {
-        const rand = Math.random();
-        if (rand < 0.33) mood = 'bass';
-        else if (rand < 0.66) mood = 'treble';
-        else mood = 'mid';
+      setParams(prev => {
+        const next = { ...prev };
+        for (const key in targetParams) {
+          const k = key as keyof VisualizerParams;
+          const targetVal = targetParams[k];
+          const startVal = startParams[k];
+          
+          if (typeof targetVal === 'number' && typeof startVal === 'number') {
+            (next as any)[k] = startVal + (targetVal - startVal) * easeProgress;
+          } else if (typeof targetVal === 'string' && targetVal.startsWith('#') && typeof startVal === 'string' && startVal.startsWith('#')) {
+            if (progress === 1) {
+              (next as any)[k] = targetVal;
+            } else {
+              const r1 = parseInt(startVal.slice(1, 3), 16);
+              const g1 = parseInt(startVal.slice(3, 5), 16);
+              const b1 = parseInt(startVal.slice(5, 7), 16);
+              const r2 = parseInt(targetVal.slice(1, 3), 16);
+              const g2 = parseInt(targetVal.slice(3, 5), 16);
+              const b2 = parseInt(targetVal.slice(5, 7), 16);
+              
+              const r = Math.round(r1 + (r2 - r1) * easeProgress);
+              const g = Math.round(g1 + (g2 - g1) * easeProgress);
+              const b = Math.round(b1 + (b2 - b1) * easeProgress);
+              
+              (next as any)[k] = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+          } else {
+            if (progress > 0.5) {
+              (next as any)[k] = targetVal;
+            }
+          }
+        }
+        return next;
+      });
+      
+      if (progress < 1) {
+        tweenAnimRef.current = requestAnimationFrame(animate);
       }
+    };
+    
+    tweenAnimRef.current = requestAnimationFrame(animate);
+  }, [setParams]);
 
-      // Base Geometry
-      newParams.k = 1.0 + Math.random() * 0.03; // Keep K close to 1 for stability
-      newParams.psi = Math.random() * Math.PI * 2;
-      newParams.z0_r = (Math.random() - 0.5) * 0.2; // Keep centered
-      newParams.z0_i = (Math.random() - 0.5) * 0.2;
-      
-      // Mood-based settings
+  const generateRandomParams = useCallback((mode: 'random' | 'smart' | 'dj', partial: boolean = false) => {
+    const prev = paramsRef.current;
+    const targetParams: Partial<VisualizerParams> = {};
+    
+    const metrics = getAudioMetrics(prev.sensitivity, prev.freqRange);
+    const hasAudio = audioActive && metrics.volume > 0.01;
+    
+    let mood = 'balanced';
+    if ((mode === 'smart' || mode === 'dj') && hasAudio) {
+      if (metrics.frequency < 0.3) mood = 'bass';
+      else if (metrics.frequency > 0.6) mood = 'treble';
+      else mood = 'mid';
+    } else {
+      const rand = Math.random();
+      if (rand < 0.33) mood = 'bass';
+      else if (rand < 0.66) mood = 'treble';
+      else mood = 'mid';
+    }
+
+    const isDJ = mode === 'dj';
+
+    const genGeometry = () => {
+      targetParams.k = 1.0 + Math.random() * 0.03;
+      targetParams.psi = Math.random() * Math.PI * 2;
+      targetParams.z0_r = (Math.random() - 0.5) * 0.2;
+      targetParams.z0_i = (Math.random() - 0.5) * 0.2;
       if (mood === 'bass') {
-        // Deep, slow, thick, dark
-        newParams.iter = 800 + Math.random() * 1000;
-        newParams.zoom = 0.001 + Math.random() * 0.002;
-        newParams.distanceZoom = 1.0 + Math.random() * 1.0;
-        newParams.spiralThickness = 1.0 + Math.random() * 1.5;
-        
-        newParams.baseHue = (Math.random() * 60 + 200) % 360; // Blues/Purples
-        newParams.hueRange = 60 + Math.random() * 60;
-        newParams.saturation = 60 + Math.random() * 40;
-        newParams.brightness = 5 + Math.random() * 15;
-        newParams.hueSpeed = 0.05 + Math.random() * 0.15;
-        newParams.trail = 0.8 + Math.random() * 0.15; // High trail for smoothness
-        
-        newParams.sgTheme = 'dark';
-        newParams.autoSpeed = 0.2 + Math.random() * 0.5;
-        newParams.autoViscosity = 0.8 + Math.random() * 0.15;
-        newParams.bgSpeed = 0.1 + Math.random() * 0.3;
+        targetParams.iter = isDJ ? 2000 + Math.random() * 2000 : 800 + Math.random() * 1000;
+        targetParams.zoom = isDJ ? 0.0005 + Math.random() * 0.001 : 0.001 + Math.random() * 0.002;
+        targetParams.distanceZoom = 1.0 + Math.random() * 1.5;
+        targetParams.spiralThickness = 1.0 + Math.random() * 2.0;
       } else if (mood === 'treble') {
-        // Fast, sharp, bright, chaotic
-        newParams.iter = 1500 + Math.random() * 1500;
-        newParams.zoom = 0.0005 + Math.random() * 0.001;
-        newParams.distanceZoom = 0.5 + Math.random() * 0.5;
-        newParams.spiralThickness = 0.2 + Math.random() * 0.6;
-        
-        newParams.baseHue = (Math.random() * 60 + 0) % 360; // Reds/Yellows
-        newParams.hueRange = 180 + Math.random() * 180;
-        newParams.saturation = 80 + Math.random() * 20;
-        newParams.brightness = 20 + Math.random() * 30;
-        newParams.hueSpeed = 0.5 + Math.random() * 1.0;
-        newParams.trail = 0.2 + Math.random() * 0.3; // Low trail for sharpness
-        
-        newParams.sgTheme = 'light';
-        newParams.autoSpeed = 1.5 + Math.random() * 1.5;
-        newParams.autoViscosity = 0.1 + Math.random() * 0.3;
-        newParams.bgSpeed = 1.0 + Math.random() * 1.0;
+        targetParams.iter = isDJ ? 3000 + Math.random() * 2000 : 1500 + Math.random() * 1500;
+        targetParams.zoom = isDJ ? 0.0001 + Math.random() * 0.0005 : 0.0005 + Math.random() * 0.001;
+        targetParams.distanceZoom = 0.2 + Math.random() * 0.8;
+        targetParams.spiralThickness = 0.1 + Math.random() * 0.5;
       } else {
-        // Balanced, harmonic, mid-range
-        newParams.iter = 1000 + Math.random() * 1000;
-        newParams.zoom = 0.0008 + Math.random() * 0.0015;
-        newParams.distanceZoom = 0.8 + Math.random() * 0.7;
-        newParams.spiralThickness = 0.6 + Math.random() * 0.8;
-        
-        newParams.baseHue = Math.random() * 360;
-        newParams.hueRange = 90 + Math.random() * 90;
-        newParams.saturation = 70 + Math.random() * 30;
-        newParams.brightness = 15 + Math.random() * 20;
-        newParams.hueSpeed = 0.2 + Math.random() * 0.4;
-        newParams.trail = 0.5 + Math.random() * 0.3;
-        
-        newParams.sgTheme = Math.random() > 0.5 ? 'light' : 'dark';
-        newParams.autoSpeed = 0.7 + Math.random() * 0.8;
-        newParams.autoViscosity = 0.4 + Math.random() * 0.4;
-        newParams.bgSpeed = 0.4 + Math.random() * 0.6;
+        targetParams.iter = isDJ ? 2500 + Math.random() * 1500 : 1000 + Math.random() * 1000;
+        targetParams.zoom = 0.0008 + Math.random() * 0.0015;
+        targetParams.distanceZoom = 0.8 + Math.random() * 0.7;
+        targetParams.spiralThickness = 0.6 + Math.random() * 0.8;
       }
+    };
 
-      newParams.harmonicColor = Math.random() > 0.3;
+    const genColors = () => {
+      targetParams.harmonicColor = Math.random() > 0.3;
+      if (mood === 'bass') {
+        targetParams.baseHue = (Math.random() * 60 + 200) % 360;
+        targetParams.hueRange = 60 + Math.random() * 60;
+        targetParams.saturation = isDJ ? 80 + Math.random() * 20 : 60 + Math.random() * 40;
+        targetParams.brightness = isDJ ? 15 + Math.random() * 20 : 5 + Math.random() * 15;
+        targetParams.hueSpeed = isDJ ? 0.5 + Math.random() * 1.0 : 0.05 + Math.random() * 0.15;
+        targetParams.trail = isDJ ? 0.9 + Math.random() * 0.09 : 0.8 + Math.random() * 0.15;
+      } else if (mood === 'treble') {
+        targetParams.baseHue = (Math.random() * 60 + 0) % 360;
+        targetParams.hueRange = isDJ ? 270 + Math.random() * 90 : 180 + Math.random() * 180;
+        targetParams.saturation = isDJ ? 90 + Math.random() * 10 : 80 + Math.random() * 20;
+        targetParams.brightness = isDJ ? 30 + Math.random() * 40 : 20 + Math.random() * 30;
+        targetParams.hueSpeed = isDJ ? 1.5 + Math.random() * 1.5 : 0.5 + Math.random() * 1.0;
+        targetParams.trail = isDJ ? 0.05 + Math.random() * 0.15 : 0.2 + Math.random() * 0.3;
+      } else {
+        targetParams.baseHue = Math.random() * 360;
+        targetParams.hueRange = 90 + Math.random() * 90;
+        targetParams.saturation = 70 + Math.random() * 30;
+        targetParams.brightness = 15 + Math.random() * 20;
+        targetParams.hueSpeed = 0.2 + Math.random() * 0.4;
+        targetParams.trail = 0.5 + Math.random() * 0.3;
+      }
+    };
+
+    const genSG = () => {
+      targetParams.sacredGeometryEnabled = isDJ ? true : Math.random() > 0.2;
+      targetParams.sgTheme = mood === 'bass' ? 'dark' : (mood === 'treble' ? 'light' : (Math.random() > 0.5 ? 'light' : 'dark'));
+      targetParams.sgAutoHarmonic = Math.random() > 0.3;
+      targetParams.sgAutoResonance = Math.random() > 0.3;
+      targetParams.sgGlobalOpacity = isDJ ? 0.7 + Math.random() * 0.3 : 0.4 + Math.random() * 0.6;
+      targetParams.sgGlobalFlowSpeed = isDJ ? 1.5 + Math.random() * 2.0 : 0.5 + Math.random() * 1.5;
+      targetParams.sgGlobalAudioReactivity = isDJ ? 2.0 + Math.random() * 4.0 : 0.5 + Math.random() * 2;
+      targetParams.sgGlobalViscosity = Math.random();
+      targetParams.sgDrawMode = Math.random() > 0.5 ? 'layers' : 'nodes';
+      targetParams.sgShowNodes = isDJ ? true : Math.random() > 0.3;
       
-      // Sacred Geometry
-      newParams.sacredGeometryEnabled = Math.random() > 0.2; // 80% chance to have SG
-      newParams.sgAutoHarmonic = Math.random() > 0.3;
-      newParams.sgAutoResonance = Math.random() > 0.3;
-      newParams.sgGlobalOpacity = 0.4 + Math.random() * 0.6;
-      newParams.sgGlobalFlowSpeed = 0.5 + Math.random() * 1.5;
-      newParams.sgGlobalAudioReactivity = 0.5 + Math.random() * 2;
-      newParams.sgGlobalViscosity = Math.random();
-      newParams.sgDrawMode = Math.random() > 0.5 ? 'layers' : 'nodes';
-      newParams.sgShowNodes = Math.random() > 0.3;
-      
-      // Select 1 to 3 random SG modes
       const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
-      const numSgModes = 1 + Math.floor(Math.random() * 3);
+      const numSgModes = isDJ ? 3 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 3);
       const selectedSgModes = [];
       for (let i = 0; i < numSgModes; i++) {
         selectedSgModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
       }
-      newParams.sacredGeometryModes = [...new Set(selectedSgModes)];
+      targetParams.sacredGeometryModes = [...new Set(selectedSgModes)];
       
-      // Spiral Resonance Modes
-      const numSpiralModes = 1 + Math.floor(Math.random() * 2);
+      const numSpiralModes = isDJ ? 2 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 2);
       const selectedSpiralModes = [];
       for (let i = 0; i < numSpiralModes; i++) {
         selectedSpiralModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
       }
-      newParams.spiralResonanceModes = [...new Set(selectedSpiralModes)];
+      targetParams.spiralResonanceModes = [...new Set(selectedSpiralModes)];
+    };
 
-      // Randomize sgSettings for all modes
-      const newSgSettings = { ...prev.sgSettings };
-      allSgModes.forEach(mode => {
-        newSgSettings[mode] = {
-          ...newSgSettings[mode],
-          complexity: 1 + Math.random() * 4,
-          connectionSpan: 50 + Math.random() * 100,
-          scale: 0.05 + Math.random() * 0.15,
-          lineOpacity: 0.3 + Math.random() * 0.7,
-          bgOpacity: Math.random() * 0.3,
-          thickness: 0.05 + Math.random() * 0.15,
-          flowSpeed: 0.1 + Math.random() * 0.9,
-          audioReactivity: 1 + Math.random() * 5,
-          viscosity: Math.random(),
-          colored: Math.random() > 0.3,
-          customColor: Math.random() * 360
-        };
-      });
-      newParams.sgSettings = newSgSettings;
-      
-      // Reactivity
-      newParams.sensitivity = 3 + Math.random() * 5;
-      newParams.freqRange = 0.5 + Math.random() * 1.0;
-      
-      // Transformation
-      newParams.autoPilot = Math.random() > 0.1; // 90% chance to be on
+    const genReact = () => {
+      targetParams.sensitivity = isDJ ? 6 + Math.random() * 4 : 3 + Math.random() * 5;
+      targetParams.freqRange = 0.5 + Math.random() * 1.0;
+      targetParams.autoPilot = isDJ ? true : Math.random() > 0.1;
       const apModes: AutoPilotMode[] = ['drift', 'harmonic', 'genesis'];
-      newParams.autoPilotMode = apModes[Math.floor(Math.random() * apModes.length)];
-      newParams.rootNote = Math.floor(Math.random() * 12);
+      targetParams.autoPilotMode = apModes[Math.floor(Math.random() * apModes.length)];
+      targetParams.rootNote = Math.floor(Math.random() * 12);
       
-      // Background
-      const bgModes: BackgroundMode[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
-      newParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
-      
-      // Generate coherent background colors based on mood
       if (mood === 'bass') {
-        newParams.bgColor1 = `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`;
-        newParams.bgColor2 = `#000000`;
+        targetParams.autoSpeed = 0.2 + Math.random() * 0.5;
+        targetParams.autoViscosity = 0.8 + Math.random() * 0.2;
       } else if (mood === 'treble') {
-        newParams.bgColor1 = `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`;
-        newParams.bgColor2 = `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`;
+        targetParams.autoSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.5 + Math.random() * 1.5;
+        targetParams.autoViscosity = 0.1 + Math.random() * 0.3;
       } else {
-        newParams.bgColor1 = `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`;
-        newParams.bgColor2 = `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`;
+        targetParams.autoSpeed = 0.7 + Math.random() * 0.8;
+        targetParams.autoViscosity = 0.4 + Math.random() * 0.4;
       }
-      
-      newParams.bgVignetteIntensity = 0.4 + Math.random() * 0.5;
+    };
 
-      return newParams;
-    });
-  }, [setParams, getAudioMetrics, audioActive]);
+    const genBg = () => {
+      const bgModes: BackgroundMode[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
+      targetParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
+      
+      if (mood === 'bass') {
+        targetParams.bgColor1 = `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`;
+        targetParams.bgColor2 = `#000000`;
+        targetParams.bgSpeed = 0.1 + Math.random() * 0.4;
+      } else if (mood === 'treble') {
+        targetParams.bgColor1 = `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`;
+        targetParams.bgColor2 = `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`;
+        targetParams.bgSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.0 + Math.random() * 1.0;
+      } else {
+        targetParams.bgColor1 = `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`;
+        targetParams.bgColor2 = `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`;
+        targetParams.bgSpeed = 0.4 + Math.random() * 0.6;
+      }
+      targetParams.bgVignetteIntensity = isDJ ? 0.6 + Math.random() * 0.4 : 0.4 + Math.random() * 0.5;
+    };
+
+    if (partial) {
+      const categories = [genGeometry, genColors, genSG, genReact, genBg];
+      categories.sort(() => Math.random() - 0.5);
+      const numToUpdate = isDJ ? (2 + Math.floor(Math.random() * 2)) : (1 + Math.floor(Math.random() * 2));
+      for (let i = 0; i < numToUpdate; i++) {
+        categories[i]();
+      }
+    } else {
+      genGeometry();
+      genColors();
+      genSG();
+      genReact();
+      genBg();
+    }
+
+    tweenParams(targetParams, partial ? 3000 : 1500);
+  }, [tweenParams, getAudioMetrics, audioActive]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     
     if (autoRandomMode !== 'none' && !autoRandomOnEmotionChange) {
       intervalId = setInterval(() => {
-        generateRandomParams(autoRandomMode === 'smart');
+        generateRandomParams(autoRandomMode as any, true);
       }, autoRandomInterval * 1000);
     }
 
@@ -226,25 +279,30 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
 
   useEffect(() => {
     let animationFrameId: number;
-    let lastTriggerTime = 0;
     
     const checkEmotion = () => {
       if (autoRandomMode !== 'none' && autoRandomOnEmotionChange && audioActive) {
         const now = Date.now();
         const metrics = getAudioMetrics(params.sensitivity, params.freqRange);
-        const currentEmotion = metrics.frequency;
+        const last = lastMetricsRef.current;
         
-        // Detect significant change in frequency (emotion)
-        // Cooldown of at least 3 seconds between triggers
-        if (Math.abs(currentEmotion - lastEmotionRef.current) > 0.3 && now - lastTriggerTime > 3000) {
-          generateRandomParams(autoRandomMode === 'smart');
-          lastEmotionRef.current = currentEmotion;
-          lastTriggerTime = now;
-        } else {
-          // Slowly adapt last emotion to current to prevent getting stuck
-          lastEmotionRef.current = lastEmotionRef.current * 0.95 + currentEmotion * 0.05;
+        const deltaV = metrics.volume - last.volume;
+        const deltaF = Math.abs(metrics.frequency - last.frequency);
+        
+        if (now - last.time > 2000) {
+          if (deltaV > 0.4) {
+            generateRandomParams(autoRandomMode as any, false);
+            lastMetricsRef.current = { ...metrics, time: now };
+          } else if (deltaF > 0.25) {
+            generateRandomParams(autoRandomMode as any, true);
+            lastMetricsRef.current = { ...metrics, time: now };
+          }
         }
+        
+        lastMetricsRef.current.volume = last.volume * 0.95 + metrics.volume * 0.05;
+        lastMetricsRef.current.frequency = last.frequency * 0.95 + metrics.frequency * 0.05;
       }
+      
       animationFrameId = requestAnimationFrame(checkEmotion);
     };
     
@@ -1851,20 +1909,27 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
             </div>
 
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => { generateRandomParams(false); setShowRandomizerMenu(false); }}
-                  className="liquid-bubble py-4 flex flex-col items-center gap-2 text-cyan-300 hover:text-cyan-200"
+                  onClick={() => { generateRandomParams('random', false); setShowRandomizerMenu(false); }}
+                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-cyan-300 hover:text-cyan-200"
                 >
-                  <Shuffle size={24} />
-                  <span className="text-sm font-semibold">Aleatorio Total</span>
+                  <Shuffle size={20} />
+                  <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Total</span>
                 </button>
                 <button
-                  onClick={() => { generateRandomParams(true); setShowRandomizerMenu(false); }}
-                  className="liquid-bubble py-4 flex flex-col items-center gap-2 text-emerald-300 hover:text-emerald-200"
+                  onClick={() => { generateRandomParams('smart', false); setShowRandomizerMenu(false); }}
+                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-emerald-300 hover:text-emerald-200"
                 >
-                  <BrainCircuit size={24} />
-                  <span className="text-sm font-semibold">Aleatorio Inteligente</span>
+                  <BrainCircuit size={20} />
+                  <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Inteligente</span>
+                </button>
+                <button
+                  onClick={() => { generateRandomParams('dj', false); setShowRandomizerMenu(false); }}
+                  className="liquid-bubble py-3 flex flex-col items-center gap-1 text-purple-400 hover:text-purple-300"
+                >
+                  <Music size={20} />
+                  <span className="text-xs font-semibold text-center leading-tight">Modo<br/>DJ</span>
                 </button>
               </div>
 
@@ -1885,6 +1950,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                       <option value="none">Apagado</option>
                       <option value="random">Aleatorio Total</option>
                       <option value="smart">Aleatorio Inteligente</option>
+                      <option value="dj">Modo DJ</option>
                     </select>
                   </div>
 
