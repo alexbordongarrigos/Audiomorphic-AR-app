@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VisualizerParams, SacredGeometryMode, SacredGeometrySettings, DEFAULT_PARAMS, AutoPilotMode, BackgroundMode, GeometryInfo } from '../types';
-import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload, Heart } from 'lucide-react';
+import { Activity, Zap, Maximize, Minimize, RotateCw, Palette, Target, Music, BrainCircuit, Wind, Droplets, Waves, Shuffle, Sprout, Glasses, Download, X, RotateCcw, Save, Upload, Heart, Lock, Unlock } from 'lucide-react';
 
 interface ControlPanelProps {
   params: VisualizerParams;
@@ -8,7 +8,7 @@ interface ControlPanelProps {
   audioActive: boolean;
   toggleAudio: () => void;
   onClose?: () => void;
-  getAudioMetrics: (sensitivity: number, freqRange: number) => { volume: number; frequency: number };
+  getAudioMetrics: (sensitivity: number, freqRange: number) => { volume: number; frequency: number; bass: number; mid: number; treble: number };
 }
 
 const SACRED_GEOMETRY_OPTIONS = [
@@ -38,24 +38,92 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSgEditMode, setSelectedSgEditMode] = useState<SacredGeometryMode>('flowerOfLife');
   const [showPresetModal, setShowPresetModal] = useState(false);
-  const [autoRandomMode, setAutoRandomMode] = useState<'none' | 'random' | 'smart' | 'dj'>('none');
+  const [showRandomizerMenu, setShowRandomizerMenu] = useState(false);
   const [autoRandomInterval, setAutoRandomInterval] = useState<number>(10);
   const [autoRandomOnEmotionChange, setAutoRandomOnEmotionChange] = useState<boolean>(false);
   const [autoEmotionSensitivity, setAutoEmotionSensitivity] = useState<number>(50);
+  const [autoBeatSensitivity, setAutoBeatSensitivity] = useState<number>(50);
   const [autoStyleFluidity, setAutoStyleFluidity] = useState<number>(50);
-  const lastMetricsRef = useRef({ volume: 0, frequency: 0, time: 0 });
+  const [autoRandomReactivitySpeed, setAutoRandomReactivitySpeed] = useState<number>(50);
+  const lastMetricsRef = useRef({ volume: 0, frequency: 0, bass: 0, mid: 0, treble: 0, time: 0, longTermVolume: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paramsRef = useRef(params);
   const tweenAnimRef = useRef<number>(0);
 
   useEffect(() => {
+    if (params.autoRandomOnBeat && autoRandomOnEmotionChange) {
+      setAutoEmotionSensitivity(80);
+      setAutoBeatSensitivity(75);
+      setAutoStyleFluidity(70);
+      setAutoRandomReactivitySpeed(80);
+      setParams(prev => ({
+        ...prev,
+        autoTimeDelay: 2,
+        autoParamRegenDelay: 1,
+        autoParamRegenBuffer: 50,
+        autoMaxSelection: 4,
+        autoParamRatioLeveler: 60
+      }));
+    } else if (params.autoRandomOnBeat) {
+      setAutoEmotionSensitivity(60);
+      setAutoBeatSensitivity(85);
+      setAutoStyleFluidity(80);
+      setAutoRandomReactivitySpeed(90);
+      setParams(prev => ({
+        ...prev,
+        autoTimeDelay: 1,
+        autoParamRegenDelay: 0.5,
+        autoParamRegenBuffer: 30,
+        autoMaxSelection: 5,
+        autoParamRatioLeveler: 40
+      }));
+    } else if (autoRandomOnEmotionChange) {
+      setAutoEmotionSensitivity(70);
+      setAutoBeatSensitivity(50);
+      setAutoStyleFluidity(60);
+      setAutoRandomReactivitySpeed(60);
+      setParams(prev => ({
+        ...prev,
+        autoTimeDelay: 4,
+        autoParamRegenDelay: 2,
+        autoParamRegenBuffer: 70,
+        autoMaxSelection: 3,
+        autoParamRatioLeveler: 70
+      }));
+    }
+  }, [params.autoRandomOnBeat, autoRandomOnEmotionChange, setParams]);
+
+  useEffect(() => {
     paramsRef.current = params;
   }, [params]);
 
-  const handleAutoRandomModeChange = (mode: 'none' | 'random' | 'smart' | 'dj') => {
-    setAutoRandomMode(mode);
+  const handleAutoRandomModeChange = (mode: VisualizerParams['autoRandomMode']) => {
     if (mode !== 'none') {
       setAutoRandomOnEmotionChange(true);
+      
+      // Balance advanced parameters when starting auto-regeneration
+      setParams(prev => ({
+        ...prev,
+        autoRandomMode: mode,
+        autoTimeDelayMode: (mode === 'rhythmic' || mode === 'astral') ? 'smart' : (Math.random() > 0.5 ? 'smart' : 'custom'),
+        autoTimeDelay: 1 + Math.random() * 4, // 1-5 seconds
+        autoParamRegenMode: mode === 'astral' ? 'smooth' : 'instant', // Instant by default, smooth for astral
+        autoParamRegenDelay: Math.random() * 3, // 0-3 seconds
+        autoParamRegenBuffer: 20 + Math.random() * 60, // 20-80%
+        autoMaxSelectionMode: 'smart',
+        autoMaxSelection: Math.floor(2 + Math.random() * 4), // 2-5
+        autoRelationshipMode: (mode === 'sacred' || mode === 'astral') ? 'empathetic' : (mode === 'rhythmic' ? 'technical' : (Math.random() > 0.5 ? 'empathetic' : 'technical')),
+        autoParamRatioLeveler: (mode === 'sacred' || mode === 'astral') ? 90 : (mode === 'rhythmic' ? 30 : 50),
+        autoOffscreenFade: mode !== 'astral' // Mostly true, false for astral
+      }));
+      
+      // Generate initial parameters immediately for immediate feedback
+      generateRandomParams(mode as any, false);
+    } else {
+      setParams(prev => ({
+        ...prev,
+        autoRandomMode: 'none'
+      }));
     }
   };
 
@@ -76,6 +144,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         const next = { ...prev };
         for (const key in targetParams) {
           const k = key as keyof VisualizerParams;
+          
+          // Skip if parameter is locked
+          if (prev.lockedParams?.includes(k)) {
+            continue;
+          }
+          
           const targetVal = targetParams[k];
           const startVal = startParams[k];
           
@@ -122,7 +196,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                   newArray.push(tv);
                 }
               }
-              (next as any)[k] = newArray;
+              // Deduplicate non-color arrays (like sacredGeometryModes)
+              if (newArray.length > 0 && typeof newArray[0] === 'string' && !newArray[0].startsWith('#')) {
+                (next as any)[k] = [...new Set(newArray)];
+              } else {
+                (next as any)[k] = newArray;
+              }
             }
           } else {
             if (progress > 0.5) {
@@ -141,15 +220,26 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     tweenAnimRef.current = requestAnimationFrame(animate);
   }, [setParams]);
 
-  const generateRandomParams = useCallback((mode: 'random' | 'smart' | 'dj', partial: boolean = false) => {
+  const generateRandomParams = useCallback((mode: 'random' | 'smart' | 'dj' | 'sacred' | 'rhythmic' | 'rainbow' | 'astral', partial: boolean = false) => {
     const prev = paramsRef.current;
     const targetParams: Partial<VisualizerParams> = {};
     
     const metrics = getAudioMetrics(prev.sensitivity, prev.freqRange);
     const hasAudio = audioActive && metrics.volume > 0.01;
     
+    // Detect song part based on long-term volume
+    const longTermVol = lastMetricsRef.current.longTermVolume;
+    let songPart: 'intro/bridge' | 'verse' | 'chorus' = 'verse';
+    if (hasAudio) {
+      if (metrics.volume > longTermVol * 1.3 && metrics.volume > 0.5) {
+        songPart = 'chorus';
+      } else if (metrics.volume < longTermVol * 0.7 || metrics.volume < 0.2) {
+        songPart = 'intro/bridge';
+      }
+    }
+    
     let mood = 'balanced';
-    if ((mode === 'smart' || mode === 'dj') && hasAudio) {
+    if ((mode === 'smart' || mode === 'dj' || mode === 'sacred' || mode === 'rhythmic' || mode === 'astral') && hasAudio) {
       if (metrics.frequency < 0.3) mood = 'bass';
       else if (metrics.frequency > 0.6) mood = 'treble';
       else mood = 'mid';
@@ -163,135 +253,539 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     const isDJ = mode === 'dj';
 
     const genGeometry = () => {
-      targetParams.k = 1.0 + Math.random() * 0.03;
-      targetParams.psi = Math.random() * Math.PI * 2;
-      targetParams.z0_r = (Math.random() - 0.5) * 0.2;
-      targetParams.z0_i = (Math.random() - 0.5) * 0.2;
-      if (mood === 'bass') {
-        targetParams.iter = isDJ ? 2000 + Math.random() * 2000 : 800 + Math.random() * 1000;
-        targetParams.zoom = isDJ ? 0.0005 + Math.random() * 0.001 : 0.001 + Math.random() * 0.002;
-        targetParams.distanceZoom = 1.0 + Math.random() * 1.5;
+      if (mode === 'random') {
+        targetParams.k = 0.8 + Math.random() * 0.4;
+        targetParams.psi = Math.random() * Math.PI * 2;
+        targetParams.z0_r = (Math.random() - 0.5) * 2;
+        targetParams.z0_i = (Math.random() - 0.5) * 2;
+        targetParams.iter = Math.floor(500 + Math.random() * 1500);
+        targetParams.zoom = 0.0001 + Math.random() * 0.0099;
+        targetParams.distanceZoom = 0.1 + Math.random() * 4.9;
+        targetParams.spiralThickness = 0.1 + Math.random() * 4.9;
+        
+        // Randomize advanced auto-regeneration settings
+        targetParams.autoTimeDelayMode = Math.random() > 0.5 ? 'smart' : 'custom';
+        targetParams.autoTimeDelay = 1 + Math.random() * 4;
+        targetParams.autoParamRegenMode = Math.random() > 0.5 ? 'instant' : 'custom';
+        targetParams.autoParamRegenDelay = Math.random() * 3;
+        targetParams.autoParamRegenBuffer = 20 + Math.random() * 60;
+        targetParams.autoMaxSelectionMode = Math.random() > 0.5 ? 'smart' : 'manual';
+        targetParams.autoMaxSelection = Math.floor(2 + Math.random() * 4);
+        targetParams.autoRelationshipMode = Math.random() > 0.5 ? 'empathetic' : 'technical';
+        targetParams.autoParamRatioLeveler = Math.random() * 100;
+        targetParams.autoOffscreenFade = Math.random() > 0.3;
+      } else if (mode === 'sacred') {
+        targetParams.k = 1.0 + (Math.random() - 0.5) * 0.02; // Very close to 1
+        targetParams.psi = Math.random() * Math.PI * 2;
+        targetParams.z0_r = 0; // Centered
+        targetParams.z0_i = 0;
+        targetParams.iter = 1200 + Math.random() * 800;
+        targetParams.zoom = 0.0005 + Math.random() * 0.0005;
+        targetParams.distanceZoom = 1.0 + Math.random() * 1.0;
+        targetParams.spiralThickness = 0.5 + Math.random() * 1.0;
+        
+        targetParams.autoTimeDelayMode = 'smart';
+        targetParams.autoParamRegenMode = 'instant';
+        targetParams.autoMaxSelectionMode = 'smart';
+        targetParams.autoRelationshipMode = 'empathetic';
+        targetParams.autoParamRatioLeveler = 80 + Math.random() * 20; // High balance for sacred
+        targetParams.autoOffscreenFade = true;
+      } else if (mode === 'rhythmic') {
+        // Intelligent Rhythmic Geometry
+        // Bass drives complexity (k) and zoom stability
+        // Mid drives iteration count (detail)
+        // Treble drives spiral thickness
+        
+        const baseK = 0.96;
+        const kVariation = metrics.bass * 0.039; // 0.96 to 0.999 (keeps it stable but reactive)
+        targetParams.k = baseK + kVariation;
+        
+        // Smooth rotation based on mid frequencies
+        targetParams.psi = prev.psi + (metrics.mid * Math.PI / 4);
+        
+        // Keep strictly centered to avoid disappearing
+        targetParams.z0_r = Math.sin(Date.now() / 3000) * 0.01;
+        targetParams.z0_i = Math.cos(Date.now() / 3000) * 0.01;
+        
+        // Iterations based on overall volume, mid, and song part
+        let baseIter = 800;
+        if (songPart === 'chorus') baseIter = 1200;
+        else if (songPart === 'intro/bridge') baseIter = 500;
+        targetParams.iter = baseIter + Math.floor(metrics.volume * 600) + Math.floor(metrics.mid * 400);
+        
+        // Zoom should be very stable, slightly pulsing with bass
+        targetParams.zoom = 0.0008 - (metrics.bass * 0.0003); // 0.0005 to 0.0008
+        
+        // Distance zoom (camera distance) pulses with bass, pulls back during chorus
+        targetParams.distanceZoom = (songPart === 'chorus' ? 1.5 : 1.2) - (metrics.bass * 0.3); // 0.9 to 1.5
+        
+        // Thickness based on treble (crisp highs = thicker/sharper lines)
+        targetParams.spiralThickness = 0.8 + (metrics.treble * 1.5); // 0.8 to 2.3
+
+        targetParams.autoTimeDelayMode = 'smart';
+        targetParams.autoParamRegenMode = 'instant';
+        targetParams.autoMaxSelectionMode = 'smart';
+        targetParams.autoRelationshipMode = 'technical';
+        targetParams.autoParamRatioLeveler = 30 + (metrics.volume * 40); // 30 to 70
+        targetParams.autoOffscreenFade = true;
+      } else if (mode === 'rainbow') {
+        targetParams.k = 0.95 + Math.random() * 0.1;
+        targetParams.psi = Math.random() * Math.PI * 2;
+        targetParams.z0_r = (Math.random() - 0.5) * 0.1;
+        targetParams.z0_i = (Math.random() - 0.5) * 0.1;
+        targetParams.iter = 1500 + Math.random() * 1000;
+        targetParams.zoom = 0.0002 + Math.random() * 0.0008;
+        targetParams.distanceZoom = 0.5 + Math.random() * 2.0;
+        targetParams.spiralThickness = 1.5 + Math.random() * 1.5;
+
+        targetParams.autoTimeDelayMode = 'smart';
+        targetParams.autoParamRegenMode = 'instant';
+        targetParams.autoMaxSelectionMode = 'smart';
+        targetParams.autoRelationshipMode = 'empathetic';
+        targetParams.autoParamRatioLeveler = 50 + Math.random() * 50;
+        targetParams.autoOffscreenFade = true;
+      } else if (mode === 'astral') {
+        targetParams.k = 0.9 + Math.random() * 0.08; // More variation for metamorphic
+        targetParams.psi = prev.psi + (metrics.volume * Math.PI); // Hyperfluid rotation
+        targetParams.z0_r = Math.sin(Date.now() / 5000) * 0.05; // Astral drifting
+        targetParams.z0_i = Math.cos(Date.now() / 5000) * 0.05;
+        targetParams.iter = 1000 + Math.floor(metrics.mid * 1000); // High detail
+        targetParams.zoom = 0.0002 + Math.random() * 0.0006; // Deep zoom
+        targetParams.distanceZoom = 0.5 + Math.random() * 3.0; // Trippy depth
         targetParams.spiralThickness = 1.0 + Math.random() * 2.0;
-      } else if (mood === 'treble') {
-        targetParams.iter = isDJ ? 3000 + Math.random() * 2000 : 1500 + Math.random() * 1500;
-        targetParams.zoom = isDJ ? 0.0001 + Math.random() * 0.0005 : 0.0005 + Math.random() * 0.001;
-        targetParams.distanceZoom = 0.2 + Math.random() * 0.8;
-        targetParams.spiralThickness = 0.1 + Math.random() * 0.5;
+
+        targetParams.autoTimeDelayMode = 'smart';
+        targetParams.autoParamRegenMode = 'smooth'; // Liquid transitions
+        targetParams.autoMaxSelectionMode = 'smart';
+        targetParams.autoRelationshipMode = 'empathetic';
+        targetParams.autoParamRatioLeveler = 80 + Math.random() * 20; // High harmony
+        targetParams.autoOffscreenFade = false; // Let it fill the screen
       } else {
-        targetParams.iter = isDJ ? 2500 + Math.random() * 1500 : 1000 + Math.random() * 1000;
-        targetParams.zoom = 0.0008 + Math.random() * 0.0015;
-        targetParams.distanceZoom = 0.8 + Math.random() * 0.7;
-        targetParams.spiralThickness = 0.6 + Math.random() * 0.8;
+        targetParams.k = 1.0 + (Math.random() - 0.5) * 0.04; // Keep it close to 1 for harmony
+        targetParams.psi = Math.random() * Math.PI * 2;
+        targetParams.z0_r = (Math.random() - 0.5) * 0.1; // Keep centered
+        targetParams.z0_i = (Math.random() - 0.5) * 0.1;
+        
+        // Balance advanced auto-regeneration settings
+        targetParams.autoTimeDelayMode = 'smart';
+        targetParams.autoTimeDelay = 2 + Math.random() * 2;
+        targetParams.autoParamRegenMode = 'custom';
+        targetParams.autoParamRegenDelay = 1 + Math.random() * 1.5;
+        targetParams.autoParamRegenBuffer = 40 + Math.random() * 20;
+        targetParams.autoMaxSelectionMode = 'smart';
+        targetParams.autoMaxSelection = Math.floor(3 + Math.random() * 2);
+        targetParams.autoRelationshipMode = 'empathetic';
+        targetParams.autoParamRatioLeveler = 40 + Math.random() * 40; // Balanced
+        targetParams.autoOffscreenFade = true;
+        
+        if (mood === 'bass') {
+          targetParams.iter = isDJ ? 1500 + Math.random() * 1000 : 800 + Math.random() * 500;
+          targetParams.zoom = isDJ ? 0.0008 + Math.random() * 0.0005 : 0.001 + Math.random() * 0.001;
+          targetParams.distanceZoom = 1.5 + Math.random() * 1.0;
+          targetParams.spiralThickness = 1.5 + Math.random() * 1.5;
+        } else if (mood === 'treble') {
+          targetParams.iter = isDJ ? 2500 + Math.random() * 1500 : 1500 + Math.random() * 1000;
+          targetParams.zoom = isDJ ? 0.0002 + Math.random() * 0.0003 : 0.0005 + Math.random() * 0.0005;
+          targetParams.distanceZoom = 0.5 + Math.random() * 0.5;
+          targetParams.spiralThickness = 0.2 + Math.random() * 0.4;
+        } else {
+          targetParams.iter = isDJ ? 2000 + Math.random() * 1000 : 1000 + Math.random() * 800;
+          targetParams.zoom = 0.0008 + Math.random() * 0.001;
+          targetParams.distanceZoom = 0.8 + Math.random() * 0.4;
+          targetParams.spiralThickness = 0.8 + Math.random() * 0.6;
+        }
       }
     };
 
     const genColors = () => {
-      targetParams.harmonicColor = Math.random() > 0.3;
-      if (mood === 'bass') {
-        targetParams.baseHue = (Math.random() * 60 + 200) % 360;
-        targetParams.hueRange = 60 + Math.random() * 60;
-        targetParams.saturation = isDJ ? 80 + Math.random() * 20 : 60 + Math.random() * 40;
-        targetParams.brightness = isDJ ? 15 + Math.random() * 20 : 5 + Math.random() * 15;
-        targetParams.hueSpeed = isDJ ? 0.5 + Math.random() * 1.0 : 0.05 + Math.random() * 0.15;
-        targetParams.trail = isDJ ? 0.9 + Math.random() * 0.09 : 0.8 + Math.random() * 0.15;
-      } else if (mood === 'treble') {
-        targetParams.baseHue = (Math.random() * 60 + 0) % 360;
-        targetParams.hueRange = isDJ ? 270 + Math.random() * 90 : 180 + Math.random() * 180;
-        targetParams.saturation = isDJ ? 90 + Math.random() * 10 : 80 + Math.random() * 20;
-        targetParams.brightness = isDJ ? 30 + Math.random() * 40 : 20 + Math.random() * 30;
-        targetParams.hueSpeed = isDJ ? 1.5 + Math.random() * 1.5 : 0.5 + Math.random() * 1.0;
-        targetParams.trail = isDJ ? 0.05 + Math.random() * 0.15 : 0.2 + Math.random() * 0.3;
-      } else {
+      if (mode === 'random') {
+        targetParams.harmonicColor = Math.random() > 0.5;
         targetParams.baseHue = Math.random() * 360;
-        targetParams.hueRange = 90 + Math.random() * 90;
-        targetParams.saturation = 70 + Math.random() * 30;
-        targetParams.brightness = 15 + Math.random() * 20;
-        targetParams.hueSpeed = 0.2 + Math.random() * 0.4;
-        targetParams.trail = 0.5 + Math.random() * 0.3;
+        targetParams.hueRange = Math.random() * 720;
+        targetParams.saturation = Math.random() * 100;
+        targetParams.brightness = Math.random() * 100;
+        targetParams.hueSpeed = Math.random() * 5;
+        targetParams.trail = Math.random();
+      } else if (mode === 'sacred') {
+        targetParams.harmonicColor = true;
+        targetParams.baseHue = Math.random() * 360;
+        targetParams.hueRange = 60 + Math.random() * 60;
+        
+        // Tonal geometry (light and dark)
+        const isDark = Math.random() > 0.5;
+        targetParams.brightness = isDark ? 10 + Math.random() * 20 : 70 + Math.random() * 30;
+        targetParams.saturation = 40 + Math.random() * 40;
+        
+        targetParams.hueSpeed = 0.1 + Math.random() * 0.3;
+        targetParams.trail = 0.8 + Math.random() * 0.15;
+      } else if (mode === 'rhythmic') {
+        targetParams.harmonicColor = true;
+        
+        // Base hue shifts slowly, but jumps on strong treble or bass
+        if (metrics.treble > 0.7 || metrics.bass > 0.8) {
+          targetParams.baseHue = (prev.baseHue + 60 + Math.random() * 60) % 360;
+        } else {
+          targetParams.baseHue = (prev.baseHue + 10) % 360;
+        }
+        
+        // Hue range expands with mid/treble and song part
+        let baseHueRange = 60;
+        if (songPart === 'chorus') baseHueRange = 180;
+        else if (songPart === 'intro/bridge') baseHueRange = 30;
+        targetParams.hueRange = baseHueRange + (metrics.mid * 120); 
+        
+        // Brightness and saturation
+        targetParams.brightness = (songPart === 'chorus' ? 50 : 30) + (metrics.volume * 40);
+        targetParams.saturation = (songPart === 'intro/bridge' ? 40 : 60) + (metrics.bass * 40);
+        
+        targetParams.hueSpeed = (songPart === 'chorus' ? 0.5 : 0.2) + (metrics.treble * 1.5);
+        targetParams.trail = (songPart === 'intro/bridge' ? 0.9 : 0.8) - (metrics.bass * 0.4); // Less trail on heavy bass for punchy look
+      } else if (mode === 'rainbow') {
+        targetParams.harmonicColor = Math.random() > 0.5;
+        targetParams.baseHue = Math.random() * 360;
+        targetParams.hueRange = 360; // Full rainbow
+        
+        targetParams.brightness = 50 + Math.random() * 50;
+        targetParams.saturation = 80 + Math.random() * 20;
+        
+        targetParams.hueSpeed = 1.0 + Math.random() * 2.0; // Fast color cycling
+        targetParams.trail = 0.5 + Math.random() * 0.4;
+      } else if (mode === 'astral') {
+        targetParams.harmonicColor = true;
+        targetParams.baseHue = (prev.baseHue + 5 + (metrics.treble * 20)) % 360; // Continuous shifting
+        targetParams.hueRange = 180 + Math.random() * 180; // Wide, psychedelic range
+        targetParams.brightness = 60 + (metrics.volume * 40); // Luminous
+        targetParams.saturation = 80 + (metrics.mid * 20); // Vibrant
+        targetParams.hueSpeed = 0.5 + (metrics.treble * 2.0); // Liquid color flow
+        targetParams.trail = 0.8 + (metrics.bass * 0.15); // Hypnotic trails
+      } else {
+        targetParams.harmonicColor = mode === 'smart' ? true : Math.random() > 0.3;
+        if (mood === 'bass') {
+          targetParams.baseHue = (Math.random() * 60 + 200) % 360; // Blues/Purples
+          targetParams.hueRange = 40 + Math.random() * 40; // Tight range
+          targetParams.saturation = isDJ ? 90 + Math.random() * 10 : 70 + Math.random() * 20;
+          targetParams.brightness = isDJ ? 20 + Math.random() * 15 : 10 + Math.random() * 10;
+          targetParams.hueSpeed = isDJ ? 0.8 + Math.random() * 0.5 : 0.1 + Math.random() * 0.2;
+          targetParams.trail = isDJ ? 0.85 + Math.random() * 0.1 : 0.7 + Math.random() * 0.2;
+        } else if (mood === 'treble') {
+          targetParams.baseHue = (Math.random() * 60 + 0) % 360; // Reds/Oranges/Yellows
+          targetParams.hueRange = isDJ ? 180 + Math.random() * 180 : 120 + Math.random() * 120; // Wide range
+          targetParams.saturation = isDJ ? 95 + Math.random() * 5 : 85 + Math.random() * 15;
+          targetParams.brightness = isDJ ? 40 + Math.random() * 30 : 25 + Math.random() * 20;
+          targetParams.hueSpeed = isDJ ? 2.0 + Math.random() * 1.5 : 0.8 + Math.random() * 1.0;
+          targetParams.trail = isDJ ? 0.1 + Math.random() * 0.1 : 0.3 + Math.random() * 0.2;
+        } else {
+          targetParams.baseHue = (Math.random() * 120 + 80) % 360; // Greens/Cyans
+          targetParams.hueRange = 90 + Math.random() * 90;
+          targetParams.saturation = 75 + Math.random() * 20;
+          targetParams.brightness = 15 + Math.random() * 15;
+          targetParams.hueSpeed = 0.3 + Math.random() * 0.5;
+          targetParams.trail = 0.5 + Math.random() * 0.2;
+        }
       }
     };
 
     const genSG = () => {
-      targetParams.sacredGeometryEnabled = isDJ ? true : Math.random() > 0.2;
-      targetParams.sgTheme = mood === 'bass' ? 'dark' : (mood === 'treble' ? 'light' : (Math.random() > 0.5 ? 'light' : 'dark'));
-      targetParams.sgAutoHarmonic = Math.random() > 0.3;
-      targetParams.sgAutoResonance = Math.random() > 0.3;
-      targetParams.sgGlobalOpacity = isDJ ? 0.7 + Math.random() * 0.3 : 0.4 + Math.random() * 0.6;
-      targetParams.sgGlobalFlowSpeed = isDJ ? 1.5 + Math.random() * 2.0 : 0.5 + Math.random() * 1.5;
-      targetParams.sgGlobalAudioReactivity = isDJ ? 2.0 + Math.random() * 4.0 : 0.5 + Math.random() * 2;
-      targetParams.sgGlobalViscosity = Math.random();
-      
-      const drawModes = ['layers', 'nodes', 'both'] as const;
-      targetParams.sgDrawMode = mode === 'smart' ? 'both' : drawModes[Math.floor(Math.random() * drawModes.length)];
-      
-      targetParams.sgShowNodes = isDJ ? true : Math.random() > 0.3;
-      
-      const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
-      const numSgModes = isDJ ? 3 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 3);
-      const selectedSgModes = [];
-      for (let i = 0; i < numSgModes; i++) {
-        selectedSgModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
+      if (mode === 'random') {
+        targetParams.sacredGeometryEnabled = Math.random() > 0.5;
+        targetParams.sgTheme = Math.random() > 0.5 ? 'light' : 'dark';
+        targetParams.sgAutoHarmonic = Math.random() > 0.5;
+        targetParams.sgAutoResonance = Math.random() > 0.5;
+        targetParams.sgGlobalOpacity = Math.random() * 3;
+        targetParams.sgGlobalFlowSpeed = (Math.random() - 0.5) * 6;
+        targetParams.sgGlobalAudioReactivity = Math.random() * 5;
+        targetParams.sgGlobalViscosity = Math.random() * 3;
+        const drawModes = ['layers', 'nodes', 'both'] as const;
+        targetParams.sgDrawMode = drawModes[Math.floor(Math.random() * drawModes.length)];
+        targetParams.sgShowNodes = Math.random() > 0.5;
+        
+        const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
+        targetParams.sacredGeometryModes = [allSgModes[Math.floor(Math.random() * allSgModes.length)]];
+        targetParams.spiralResonanceModes = [allSgModes[Math.floor(Math.random() * allSgModes.length)]];
+      } else if (mode === 'sacred') {
+        targetParams.sacredGeometryEnabled = true;
+        targetParams.sgTheme = Math.random() > 0.5 ? 'light' : 'dark';
+        targetParams.sgAutoHarmonic = true;
+        targetParams.sgAutoResonance = true;
+        
+        const sacredModes: SacredGeometryMode[] = ['flowerOfLife', 'metatron', 'sriYantra', 'treeOfLife', 'mandala1', 'mandala2', 'mandala3', 'chakras', 'om', 'lotus', 'dharmaChakra'];
+        targetParams.sacredGeometryModes = [sacredModes[Math.floor(Math.random() * sacredModes.length)]];
+        if (Math.random() > 0.5) targetParams.sacredGeometryModes.push(sacredModes[Math.floor(Math.random() * sacredModes.length)]);
+        
+        targetParams.sgDrawMode = Math.random() > 0.5 ? 'layers' : 'both';
+        targetParams.sgShowNodes = Math.random() > 0.5;
+        targetParams.sgGlobalOpacity = 1.5 + Math.random() * 1.5;
+        targetParams.sgGlobalFlowSpeed = (Math.random() - 0.5) * 2;
+        targetParams.sgGlobalAudioReactivity = 1.0 + Math.random() * 2.0;
+        targetParams.sgGlobalViscosity = 1.5 + Math.random() * 1.5;
+        
+        const resonanceModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'torus', 'sriYantra', 'chakras', 'lotus'];
+        targetParams.spiralResonanceModes = [resonanceModes[Math.floor(Math.random() * resonanceModes.length)]];
+      } else if (mode === 'rhythmic') {
+        targetParams.sacredGeometryEnabled = true;
+        targetParams.sgTheme = metrics.bass > 0.6 ? 'dark' : 'light';
+        targetParams.sgAutoHarmonic = true;
+        targetParams.sgAutoResonance = true;
+        
+        if (!partial) {
+          // Select mode based on frequency dominance only on major emotion changes
+          const bassModes: SacredGeometryMode[] = ['torus', 'cymatics'];
+          const midModes: SacredGeometryMode[] = ['vectorEquilibrium', 'flowerOfLife'];
+          const trebleModes: SacredGeometryMode[] = ['quantumWave', 'holographicFractal'];
+          
+          let selectedModes = [];
+          if (metrics.bass > metrics.mid && metrics.bass > metrics.treble) {
+            selectedModes.push(bassModes[Math.floor(Math.random() * bassModes.length)]);
+          } else if (metrics.treble > metrics.mid && metrics.treble > metrics.bass) {
+            selectedModes.push(trebleModes[Math.floor(Math.random() * trebleModes.length)]);
+          } else {
+            selectedModes.push(midModes[Math.floor(Math.random() * midModes.length)]);
+          }
+          
+          if (songPart === 'chorus' || metrics.volume > 0.7) {
+            selectedModes.push('metatron'); // Add complexity on high volume or chorus
+          }
+          
+          targetParams.sacredGeometryModes = selectedModes;
+          targetParams.spiralResonanceModes = selectedModes;
+        } else {
+          // Keep existing modes during rhythmic beats
+          targetParams.sacredGeometryModes = prev.sacredGeometryModes;
+          targetParams.spiralResonanceModes = prev.spiralResonanceModes;
+        }
+        
+        targetParams.sgDrawMode = (songPart === 'chorus' || metrics.treble > 0.6) ? 'both' : 'nodes';
+        targetParams.sgShowNodes = true;
+        targetParams.sgGlobalOpacity = (songPart === 'intro/bridge' ? 0.3 : 0.5) + (metrics.volume * 0.5);
+        targetParams.sgGlobalFlowSpeed = (metrics.mid * (songPart === 'chorus' ? 5 : 3)) * (Math.random() > 0.5 ? 1 : -1);
+        targetParams.sgGlobalAudioReactivity = (songPart === 'intro/bridge' ? 0.5 : 1.0) + (metrics.bass * 3.0);
+        targetParams.sgGlobalViscosity = (songPart === 'chorus' ? 0.5 : 0.8) - (metrics.treble * 0.5);
+      } else if (mode === 'rainbow') {
+        targetParams.sacredGeometryEnabled = true;
+        targetParams.sgTheme = 'light';
+        targetParams.sgAutoHarmonic = true;
+        targetParams.sgAutoResonance = true;
+        
+        const rainbowModes: SacredGeometryMode[] = ['flowerOfLife', 'metatron', 'sriYantra', 'treeOfLife', 'mandala1', 'mandala2', 'mandala3', 'chakras', 'om', 'lotus', 'dharmaChakra', 'cymatics', 'quantumWave', 'torus', 'holographicFractal', 'vectorEquilibrium', 'goldenSpiral'];
+        targetParams.sacredGeometryModes = [rainbowModes[Math.floor(Math.random() * rainbowModes.length)]];
+        if (Math.random() > 0.3) targetParams.sacredGeometryModes.push(rainbowModes[Math.floor(Math.random() * rainbowModes.length)]);
+        if (Math.random() > 0.7) targetParams.sacredGeometryModes.push(rainbowModes[Math.floor(Math.random() * rainbowModes.length)]);
+        
+        targetParams.sgDrawMode = 'both';
+        targetParams.sgShowNodes = true;
+        targetParams.sgGlobalOpacity = 2.0 + Math.random() * 1.0;
+        targetParams.sgGlobalFlowSpeed = (Math.random() - 0.5) * 6;
+        targetParams.sgGlobalAudioReactivity = 2.5 + Math.random() * 2.5;
+        targetParams.sgGlobalViscosity = 1.0 + Math.random() * 2.0;
+        
+        targetParams.spiralResonanceModes = [rainbowModes[Math.floor(Math.random() * rainbowModes.length)]];
+      } else if (mode === 'astral') {
+        targetParams.sacredGeometryEnabled = true;
+        targetParams.sgTheme = 'light'; // Christic luminosity
+        targetParams.sgAutoHarmonic = true;
+        targetParams.sgAutoResonance = true;
+        
+        const astralModes: SacredGeometryMode[] = ['flowerOfLife', 'metatron', 'sriYantra', 'torus', 'holographicFractal', 'goldenSpiral', 'chakras', 'om', 'lotus'];
+        targetParams.sacredGeometryModes = [astralModes[Math.floor(Math.random() * astralModes.length)]];
+        if (Math.random() > 0.3) targetParams.sacredGeometryModes.push(astralModes[Math.floor(Math.random() * astralModes.length)]);
+        if (metrics.volume > 0.6) targetParams.sacredGeometryModes.push(astralModes[Math.floor(Math.random() * astralModes.length)]);
+        
+        targetParams.sgDrawMode = 'both';
+        targetParams.sgShowNodes = true;
+        targetParams.sgGlobalOpacity = 0.6 + (metrics.volume * 0.4);
+        targetParams.sgGlobalFlowSpeed = (metrics.mid * 4) * (Math.random() > 0.5 ? 1 : -1);
+        targetParams.sgGlobalAudioReactivity = 2.0 + (metrics.bass * 2.0);
+        targetParams.sgGlobalViscosity = 1.0 + (metrics.treble * 1.0); // Hyperfluid
+        
+        targetParams.spiralResonanceModes = [astralModes[Math.floor(Math.random() * astralModes.length)]];
+      } else {
+        targetParams.sacredGeometryEnabled = isDJ ? true : Math.random() > 0.2;
+        targetParams.sgTheme = mood === 'bass' ? 'dark' : (mood === 'treble' ? 'light' : (Math.random() > 0.5 ? 'light' : 'dark'));
+        targetParams.sgAutoHarmonic = mode === 'smart' ? true : Math.random() > 0.3;
+        targetParams.sgAutoResonance = mode === 'smart' ? true : Math.random() > 0.3;
+        targetParams.sgGlobalOpacity = isDJ ? 0.7 + Math.random() * 0.3 : 0.4 + Math.random() * 0.6;
+        targetParams.sgGlobalFlowSpeed = isDJ ? 1.5 + Math.random() * 2.0 : 0.5 + Math.random() * 1.5;
+        targetParams.sgGlobalAudioReactivity = isDJ ? 2.0 + Math.random() * 4.0 : 0.5 + Math.random() * 2;
+        targetParams.sgGlobalViscosity = Math.random();
+        
+        const drawModes = ['layers', 'nodes', 'both'] as const;
+        targetParams.sgDrawMode = mode === 'smart' ? 'both' : drawModes[Math.floor(Math.random() * drawModes.length)];
+        
+        targetParams.sgShowNodes = isDJ ? true : Math.random() > 0.3;
+        
+        const allSgModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
+        const numSgModes = isDJ ? 3 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 3);
+        const selectedSgModes = [];
+        for (let i = 0; i < numSgModes; i++) {
+          selectedSgModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
+        }
+        targetParams.sacredGeometryModes = [...new Set(selectedSgModes)];
+        
+        const numSpiralModes = isDJ ? 2 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 2);
+        const selectedSpiralModes = [];
+        for (let i = 0; i < numSpiralModes; i++) {
+          selectedSpiralModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
+        }
+        targetParams.spiralResonanceModes = [...new Set(selectedSpiralModes)];
       }
-      targetParams.sacredGeometryModes = [...new Set(selectedSgModes)];
-      
-      const numSpiralModes = isDJ ? 2 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * 2);
-      const selectedSpiralModes = [];
-      for (let i = 0; i < numSpiralModes; i++) {
-        selectedSpiralModes.push(allSgModes[Math.floor(Math.random() * allSgModes.length)]);
-      }
-      targetParams.spiralResonanceModes = [...new Set(selectedSpiralModes)];
     };
 
     const genReact = () => {
-      targetParams.sensitivity = isDJ ? 6 + Math.random() * 4 : 3 + Math.random() * 5;
-      targetParams.freqRange = 0.5 + Math.random() * 1.0;
-      targetParams.autoPilot = isDJ ? true : Math.random() > 0.1;
-      const apModes: AutoPilotMode[] = ['drift', 'harmonic', 'genesis'];
-      targetParams.autoPilotMode = apModes[Math.floor(Math.random() * apModes.length)];
-      targetParams.rootNote = Math.floor(Math.random() * 12);
-      
-      if (mood === 'bass') {
-        targetParams.autoSpeed = 0.2 + Math.random() * 0.5;
-        targetParams.autoViscosity = 0.8 + Math.random() * 0.2;
-      } else if (mood === 'treble') {
-        targetParams.autoSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.5 + Math.random() * 1.5;
-        targetParams.autoViscosity = 0.1 + Math.random() * 0.3;
+      if (mode === 'random') {
+        targetParams.sensitivity = Math.random() * 5;
+        targetParams.freqRange = 0.1 + Math.random() * 0.9;
+        targetParams.autoPilot = Math.random() > 0.5;
+        const apModes: AutoPilotMode[] = ['drift', 'harmonic', 'genesis'];
+        targetParams.autoPilotMode = apModes[Math.floor(Math.random() * apModes.length)];
+        targetParams.rootNote = Math.floor(Math.random() * 12);
+        targetParams.autoSpeed = Math.random() * 2;
+        targetParams.autoViscosity = Math.random();
+      } else if (mode === 'sacred') {
+        targetParams.sensitivity = 0.5 + Math.random() * 1.0;
+        targetParams.freqRange = 0.2 + Math.random() * 0.6;
+        targetParams.autoPilot = true;
+        targetParams.autoPilotMode = 'harmonic';
+        targetParams.rootNote = Math.floor(Math.random() * 12);
+        targetParams.autoSpeed = 0.2 + Math.random() * 0.4;
+        targetParams.autoViscosity = 0.7 + Math.random() * 0.3;
+      } else if (mode === 'rhythmic') {
+        targetParams.sensitivity = (songPart === 'chorus' ? 3.0 : 2.0) + (metrics.volume * 2.0);
+        targetParams.freqRange = (songPart === 'intro/bridge' ? 0.3 : 0.5) + (metrics.mid * 0.4);
+        targetParams.autoPilot = true;
+        targetParams.autoPilotMode = (songPart === 'chorus' || metrics.bass > 0.7) ? 'genesis' : 'harmonic';
+        
+        // Root note based on baseHue to keep it harmonic
+        targetParams.rootNote = Math.floor((targetParams.baseHue || prev.baseHue) / 30) % 12;
+        
+        targetParams.autoSpeed = (songPart === 'chorus' ? 0.5 : 0.2) + (metrics.mid * 1.5);
+        targetParams.autoViscosity = (songPart === 'intro/bridge' ? 0.9 : 0.7) - (metrics.bass * 0.4);
+      } else if (mode === 'rainbow') {
+        targetParams.sensitivity = 3.0 + Math.random() * 2.0;
+        targetParams.freqRange = 0.8 + Math.random() * 0.2;
+        targetParams.autoPilot = true;
+        targetParams.autoPilotMode = 'genesis';
+        targetParams.rootNote = Math.floor(Math.random() * 12);
+        targetParams.autoSpeed = 1.0 + Math.random() * 2.0;
+        targetParams.autoViscosity = 0.8 + Math.random() * 0.2; // Viscous
+      } else if (mode === 'astral') {
+        targetParams.sensitivity = 3.0 + (metrics.volume * 3.0);
+        targetParams.freqRange = 0.6 + (metrics.mid * 0.4);
+        targetParams.autoPilot = true;
+        targetParams.autoPilotMode = 'genesis'; // Transcendental
+        targetParams.rootNote = Math.floor((targetParams.baseHue || prev.baseHue) / 30) % 12;
+        targetParams.autoSpeed = 0.5 + (metrics.mid * 1.5);
+        targetParams.autoViscosity = 0.8 + (metrics.bass * 0.2); // Smooth, liquid
       } else {
-        targetParams.autoSpeed = 0.7 + Math.random() * 0.8;
-        targetParams.autoViscosity = 0.4 + Math.random() * 0.4;
+        targetParams.sensitivity = isDJ ? 6 + Math.random() * 4 : 3 + Math.random() * 5;
+        targetParams.freqRange = 0.5 + Math.random() * 1.0;
+        targetParams.autoPilot = isDJ ? true : Math.random() > 0.1;
+        const apModes: AutoPilotMode[] = ['drift', 'harmonic', 'genesis'];
+        targetParams.autoPilotMode = mode === 'smart' ? 'harmonic' : apModes[Math.floor(Math.random() * apModes.length)];
+        targetParams.rootNote = Math.floor(Math.random() * 12);
+        
+        if (mood === 'bass') {
+          targetParams.autoSpeed = 0.2 + Math.random() * 0.5;
+          targetParams.autoViscosity = 0.8 + Math.random() * 0.2;
+        } else if (mood === 'treble') {
+          targetParams.autoSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.5 + Math.random() * 1.5;
+          targetParams.autoViscosity = 0.1 + Math.random() * 0.3;
+        } else {
+          targetParams.autoSpeed = 0.7 + Math.random() * 0.8;
+          targetParams.autoViscosity = 0.4 + Math.random() * 0.4;
+        }
       }
     };
 
     const genBg = () => {
       const bgModes: BackgroundMode[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
-      targetParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
       
-      if (mood === 'bass') {
-        targetParams.bgColors = [
-          `#${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}`,
-          `#000000`
-        ];
-        targetParams.bgSpeed = 0.1 + Math.random() * 0.4;
-      } else if (mood === 'treble') {
-        targetParams.bgColors = [
-          `#${Math.floor(Math.random()*50 + 50).toString(16).padStart(2, '0')}${Math.floor(Math.random()*50).toString(16).padStart(2, '0')}00`,
-          `#${Math.floor(Math.random()*30).toString(16).padStart(2, '0')}0000`
-        ];
-        targetParams.bgSpeed = isDJ ? 2.0 + Math.random() * 2.0 : 1.0 + Math.random() * 1.0;
+      const generateHarmonicColors = (baseHue: number, count: number, isDark: boolean) => {
+        const colors = [];
+        for (let i = 0; i < count; i++) {
+          const hue = (baseHue + i * (360 / count)) % 360;
+          const sat = 40 + Math.random() * 40;
+          const light = isDark ? 5 + Math.random() * 15 : 70 + Math.random() * 20;
+          
+          // Convert HSL to Hex
+          const s = sat / 100;
+          const l = light / 100;
+          const k = (n: number) => (n + hue / 30) % 12;
+          const a = s * Math.min(l, 1 - l);
+          const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+          
+          const r = Math.round(255 * f(0)).toString(16).padStart(2, '0');
+          const g = Math.round(255 * f(8)).toString(16).padStart(2, '0');
+          const b = Math.round(255 * f(4)).toString(16).padStart(2, '0');
+          
+          colors.push(`#${r}${g}${b}`);
+        }
+        return colors;
+      };
+
+      if (mode === 'random') {
+        targetParams.bgMode = bgModes[Math.floor(Math.random() * bgModes.length)];
+        const numColors = 2 + Math.floor(Math.random() * 3);
+        targetParams.bgColors = generateHarmonicColors(Math.random() * 360, numColors, Math.random() > 0.5);
+        targetParams.bgSpeed = Math.random() * 2;
+        targetParams.bgVignetteIntensity = Math.random();
+      } else if (mode === 'sacred') {
+        const sacredBgModes: BackgroundMode[] = ['gradient', 'organic-fade', 'morphing-colors'];
+        targetParams.bgMode = sacredBgModes[Math.floor(Math.random() * sacredBgModes.length)];
+        
+        const isDark = Math.random() > 0.5; // Tonal geometry
+        const baseHue = Math.random() * 360;
+        targetParams.bgColors = generateHarmonicColors(baseHue, 3, isDark);
+        
+        targetParams.bgSpeed = 0.1 + Math.random() * 0.3;
+        targetParams.bgVignetteIntensity = 0.6 + Math.random() * 0.4;
+      } else if (mode === 'rhythmic') {
+        if (songPart === 'chorus' || metrics.bass > 0.8) targetParams.bgMode = 'morphing-colors';
+        else if (metrics.treble > 0.7) targetParams.bgMode = 'gradient';
+        else targetParams.bgMode = 'organic-fade';
+        
+        const isDark = metrics.bass > 0.5 || songPart === 'intro/bridge';
+        targetParams.bgColors = generateHarmonicColors(targetParams.baseHue || prev.baseHue, (songPart === 'chorus' || metrics.volume > 0.6) ? 4 : 2, isDark);
+        
+        targetParams.bgSpeed = (songPart === 'chorus' ? 0.5 : 0.1) + (metrics.mid * 1.8);
+        targetParams.bgVignetteIntensity = (songPart === 'intro/bridge' ? 0.6 : 0.3) + (metrics.bass * 0.5);
+      } else if (mode === 'rainbow') {
+        const rainbowBgModes: BackgroundMode[] = ['morphing-colors', 'organic-fade', 'gradient'];
+        targetParams.bgMode = rainbowBgModes[Math.floor(Math.random() * rainbowBgModes.length)];
+        
+        const baseHue = Math.random() * 360;
+        targetParams.bgColors = generateHarmonicColors(baseHue, 5, false); // Bright, many colors
+        
+        targetParams.bgSpeed = 1.0 + Math.random() * 2.0;
+        targetParams.bgVignetteIntensity = 0.2 + Math.random() * 0.6;
+      } else if (mode === 'astral') {
+        targetParams.bgMode = 'organic-fade'; // Liquid transitions
+        targetParams.bgColors = generateHarmonicColors(targetParams.baseHue || prev.baseHue, 5, false); // Many balanced colors
+        targetParams.bgSpeed = 0.3 + (metrics.mid * 1.5);
+        targetParams.bgVignetteIntensity = 0.2 + (metrics.bass * 0.3); // Bright, luminous
       } else {
-        targetParams.bgColors = [
-          `#${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}${Math.floor(Math.random()*40).toString(16).padStart(2, '0')}`,
-          `#${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}${Math.floor(Math.random()*20).toString(16).padStart(2, '0')}`
-        ];
-        targetParams.bgSpeed = 0.4 + Math.random() * 0.6;
+        targetParams.bgMode = isDJ ? 'morphing-colors' : bgModes[Math.floor(Math.random() * bgModes.length)];
+        const isDark = mood === 'bass' ? true : (mood === 'treble' ? false : Math.random() > 0.5);
+        const baseHue = Math.random() * 360;
+        const numColors = isDJ ? 4 : 2 + Math.floor(Math.random() * 2);
+        targetParams.bgColors = generateHarmonicColors(baseHue, numColors, isDark);
+        
+        targetParams.bgSpeed = isDJ ? 1.5 + Math.random() * 1.5 : 0.5 + Math.random() * 1.0;
+        targetParams.bgVignetteIntensity = isDJ ? 0.8 + Math.random() * 0.2 : 0.4 + Math.random() * 0.4;
       }
-      targetParams.bgVignetteIntensity = isDJ ? 0.6 + Math.random() * 0.4 : 0.4 + Math.random() * 0.5;
     };
+
+    const fluidityFactor = autoStyleFluidity / 100;
+    const reactivityFactor = autoRandomReactivitySpeed / 100;
 
     if (partial) {
       const categories = [genGeometry, genColors, genSG, genReact, genBg];
       categories.sort(() => Math.random() - 0.5);
-      const numToUpdate = isDJ ? (2 + Math.floor(Math.random() * 2)) : (1 + Math.floor(Math.random() * 2));
+      
+      // Fluidity determines how many categories update during a partial change
+      const maxUpdates = isDJ ? 4 : 3;
+      const minUpdates = 1;
+      const numToUpdate = Math.max(minUpdates, Math.floor(fluidityFactor * maxUpdates));
+      
       for (let i = 0; i < numToUpdate; i++) {
         categories[i]();
       }
@@ -303,64 +797,150 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
       genBg();
     }
 
-    const fluidityFactor = autoStyleFluidity / 100;
+    // Blend targetParams with current params based on fluidity for numeric values
+    // 100% fluidity = use targetParams entirely
+    // 0% fluidity = keep current params (no change)
+    if (fluidityFactor < 1.0) {
+      for (const key in targetParams) {
+        const k = key as keyof VisualizerParams;
+        if (typeof targetParams[k] === 'number' && typeof prev[k] === 'number') {
+          (targetParams as any)[k] = (prev as any)[k] + ((targetParams as any)[k] - (prev as any)[k]) * fluidityFactor;
+        }
+      }
+    }
     
     // Base duration depends on partial update and mood
     let baseDuration = partial ? 3000 : 1500;
     if (mood === 'bass') baseDuration *= 1.5; // Slower, heavier transitions for bass
     else if (mood === 'treble') baseDuration *= 0.7; // Faster, snappier transitions for treble
     
-    // Calculate final duration using fluidity factor
-    // 0% fluidity = very fast (e.g. 100ms)
-    // 100% fluidity = very slow (e.g. up to 8000ms)
-    const tweenDuration = 100 + (baseDuration * 3 * fluidityFactor);
+    // Calculate final duration using reactivity speed
+    // 0% reactivity = very slow (e.g. up to 8000ms)
+    // 100% reactivity = very fast (e.g. 100ms)
+    const tweenDuration = 100 + (baseDuration * 3 * (1 - reactivityFactor));
+
+    // Remove locked params
+    if (prev.lockedParams && prev.lockedParams.length > 0) {
+      for (const key of prev.lockedParams) {
+        if (key in targetParams) {
+          delete (targetParams as any)[key];
+        }
+      }
+      
+      // Handle individual array locks
+      if (targetParams.sacredGeometryModes) {
+        const currentSgModes = prev.sacredGeometryModes || [];
+        const newSgModes: SacredGeometryMode[] = [];
+        const allModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
+        
+        allModes.forEach(mode => {
+          const isLocked = prev.lockedParams?.includes(`sacredMode_${mode}`);
+          if (isLocked) {
+            if (currentSgModes.includes(mode)) newSgModes.push(mode);
+          } else {
+            if (targetParams.sacredGeometryModes?.includes(mode)) newSgModes.push(mode);
+          }
+        });
+        targetParams.sacredGeometryModes = newSgModes.length > 0 ? newSgModes : currentSgModes;
+      }
+
+      if (targetParams.spiralResonanceModes) {
+        const currentResModes = prev.spiralResonanceModes || [];
+        const newResModes: SacredGeometryMode[] = [];
+        const allModes = SACRED_GEOMETRY_OPTIONS.map(o => o.id as SacredGeometryMode);
+        
+        allModes.forEach(mode => {
+          const isLocked = prev.lockedParams?.includes(`spiralMode_${mode}`);
+          if (isLocked) {
+            if (currentResModes.includes(mode)) newResModes.push(mode);
+          } else {
+            if (targetParams.spiralResonanceModes?.includes(mode)) newResModes.push(mode);
+          }
+        });
+        targetParams.spiralResonanceModes = newResModes.length > 0 ? newResModes : currentResModes;
+      }
+    }
 
     tweenParams(targetParams, tweenDuration);
-  }, [tweenParams, getAudioMetrics, audioActive, autoStyleFluidity]);
+  }, [tweenParams, getAudioMetrics, audioActive, autoStyleFluidity, autoRandomReactivitySpeed]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     
-    if (autoRandomMode !== 'none' && !autoRandomOnEmotionChange) {
+    // Run interval if emotion change is disabled OR if audio is not active (fallback)
+    if (params.autoRandomMode !== 'none' && (!autoRandomOnEmotionChange || !audioActive)) {
       intervalId = setInterval(() => {
-        generateRandomParams(autoRandomMode as any, true);
+        generateRandomParams(params.autoRandomMode as any, true);
       }, autoRandomInterval * 1000);
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [autoRandomMode, autoRandomInterval, autoRandomOnEmotionChange, generateRandomParams]);
+  }, [params.autoRandomMode, autoRandomInterval, autoRandomOnEmotionChange, audioActive, generateRandomParams]);
 
   useEffect(() => {
     let animationFrameId: number;
+    let beatCooldown = 0;
     
     const checkEmotion = () => {
-      if (autoRandomMode !== 'none' && autoRandomOnEmotionChange && audioActive) {
+      if (params.autoRandomMode !== 'none' && (autoRandomOnEmotionChange || params.autoRandomOnBeat) && audioActive) {
         const now = Date.now();
         const metrics = getAudioMetrics(params.sensitivity, params.freqRange);
         const last = lastMetricsRef.current;
         
         const deltaV = metrics.volume - last.volume;
         const deltaF = Math.abs(metrics.frequency - last.frequency);
+        const deltaBass = metrics.bass - last.bass;
         
         const sensitivityFactor = autoEmotionSensitivity / 100;
+        const beatSensitivityFactor = autoBeatSensitivity / 100;
+        
         const thresholdV = 0.8 - (0.7 * sensitivityFactor);
         const thresholdF = 0.5 - (0.45 * sensitivityFactor);
         const cooldown = 4000 - (3500 * sensitivityFactor);
+        const maxWaitTime = 15000 - (10000 * sensitivityFactor); // 5-15 seconds fallback
         
-        if (now - last.time > cooldown) {
-          if (deltaV > thresholdV) {
-            generateRandomParams(autoRandomMode as any, false);
-            lastMetricsRef.current = { ...metrics, time: now };
-          } else if (deltaF > thresholdF) {
-            generateRandomParams(autoRandomMode as any, true);
-            lastMetricsRef.current = { ...metrics, time: now };
+        // Emotion/Style Detection (Slow, structural changes)
+        if (autoRandomOnEmotionChange) {
+          if (now - last.time > cooldown) {
+            if (deltaV > thresholdV) {
+              generateRandomParams(params.autoRandomMode as any, false);
+              lastMetricsRef.current = { ...metrics, time: now, longTermVolume: last.longTermVolume };
+            } else if (deltaF > thresholdF) {
+              generateRandomParams(params.autoRandomMode as any, true);
+              lastMetricsRef.current = { ...metrics, time: now, longTermVolume: last.longTermVolume };
+            } else if (now - last.time > maxWaitTime) {
+              // Fallback if no significant emotion change detected for a while
+              generateRandomParams(params.autoRandomMode as any, true);
+              lastMetricsRef.current = { ...metrics, time: now, longTermVolume: last.longTermVolume };
+            }
+          }
+        }
+
+        // Beat Detection (Fast, reactive changes)
+        if (params.autoRandomOnBeat) {
+          const beatThreshold = 0.7 - (0.5 * beatSensitivityFactor); // 0.2 to 0.7
+          const minCooldown = 1000 - (700 * beatSensitivityFactor); // 300ms to 1000ms cooldown
+          
+          if (now - beatCooldown > minCooldown) { 
+            // Detect beat primarily from bass, fallback to volume
+            const isBeat = (deltaBass > beatThreshold && metrics.bass > 0.45) || 
+                           (deltaV > beatThreshold && metrics.volume > 0.55);
+                           
+            if (isBeat) {
+              generateRandomParams(params.autoRandomMode as any, true); // Partial update on beat
+              beatCooldown = now;
+            }
           }
         }
         
         lastMetricsRef.current.volume = last.volume * 0.95 + metrics.volume * 0.05;
         lastMetricsRef.current.frequency = last.frequency * 0.95 + metrics.frequency * 0.05;
+        lastMetricsRef.current.bass = last.bass * 0.95 + metrics.bass * 0.05;
+        lastMetricsRef.current.mid = last.mid * 0.95 + metrics.mid * 0.05;
+        lastMetricsRef.current.treble = last.treble * 0.95 + metrics.treble * 0.05;
+        lastMetricsRef.current.longTermVolume = last.longTermVolume * 0.995 + metrics.volume * 0.005; // Very slow moving average for song parts
       }
       
       animationFrameId = requestAnimationFrame(checkEmotion);
@@ -371,7 +951,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [autoRandomMode, autoRandomOnEmotionChange, audioActive, params.sensitivity, params.freqRange, generateRandomParams, getAudioMetrics, autoEmotionSensitivity]);
+  }, [params.autoRandomMode, autoRandomOnEmotionChange, params.autoRandomOnBeat, audioActive, params.sensitivity, params.freqRange, generateRandomParams, getAudioMetrics, autoEmotionSensitivity, autoBeatSensitivity]);
+
+  const prevAutoRandomModeRef = useRef(params.autoRandomMode);
+  useEffect(() => {
+    if (params.autoRandomMode !== prevAutoRandomModeRef.current) {
+      if (params.autoRandomMode !== 'none') {
+        generateRandomParams(params.autoRandomMode as any, false);
+      }
+      prevAutoRandomModeRef.current = params.autoRandomMode;
+    }
+  }, [params.autoRandomMode, generateRandomParams]);
 
   const handleInstallClick = () => {
     window.open("https://drive.google.com/drive/folders/1bZ8yvbWr7r3eJUdKIQCSSuu-p398mAkn?usp=sharing", "_blank");
@@ -436,99 +1026,122 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
   
   const handleChange = (key: keyof VisualizerParams, value: number | boolean | string | string[]) => {
     if (typeof value === 'number' && isNaN(value)) return;
-    setParams(prev => ({ ...prev, [key]: value }));
+    
+    if (key === 'autoPilot' && value === true) {
+      setParams(prev => ({ 
+        ...prev, 
+        [key]: value,
+        autoTimeDelayMode: Math.random() > 0.5 ? 'smart' : 'custom',
+        autoTimeDelay: 1 + Math.random() * 4, // 1-5 seconds
+        autoParamRegenMode: Math.random() > 0.5 ? 'instant' : 'custom',
+        autoParamRegenDelay: Math.random() * 3, // 0-3 seconds
+        autoParamRegenBuffer: 20 + Math.random() * 60, // 20-80%
+        autoMaxSelectionMode: Math.random() > 0.5 ? 'smart' : 'manual',
+        autoMaxSelection: Math.floor(2 + Math.random() * 4), // 2-5
+        autoRelationshipMode: Math.random() > 0.5 ? 'empathetic' : 'technical',
+        autoOffscreenFade: Math.random() > 0.3 // Mostly true
+      }));
+    } else {
+      setParams(prev => ({ ...prev, [key]: value }));
+    }
   };
 
   const randomizeSection = (section: string) => {
-    switch (section) {
-      case 'background':
-        const modes: any[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
-        setParams(prev => ({
-          ...prev,
-          bgMode: modes[Math.floor(Math.random() * modes.length)],
-          bgColors: [
+    setParams(prev => {
+      const next = { ...prev };
+      const isLocked = (key: keyof VisualizerParams) => prev.lockedParams?.includes(key);
+
+      switch (section) {
+        case 'background':
+          const modes: any[] = ['solid', 'gradient', 'liquid-rainbow', 'crystal-bubbles', 'organic-fade', 'morphing-colors'];
+          if (!isLocked('bgMode')) next.bgMode = modes[Math.floor(Math.random() * modes.length)];
+          if (!isLocked('bgColors')) next.bgColors = [
             `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
             `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`
-          ],
-          bgSpeed: Math.random() * 2,
-          bgVignetteIntensity: Math.random()
-        }));
-        break;
-      case 'baseGeometry':
-        setParams(prev => ({
-          ...prev,
-          k: 0.9 + Math.random() * 0.2,
-          iter: Math.floor(500 + Math.random() * 1500),
-          zoom: 0.0001 + Math.random() * 0.0099,
-          distanceZoom: 0.1 + Math.random() * 4.9,
-          spiralThickness: 0.1 + Math.random() * 4.9
-        }));
-        break;
-      case 'transformation':
-        setParams(prev => ({
-          ...prev,
-          psi: Math.random() * Math.PI * 2,
-          z0_r: (Math.random() - 0.5) * 2,
-          z0_i: (Math.random() - 0.5) * 2
-        }));
-        break;
-      case 'color':
-        setParams(prev => ({
-          ...prev,
-          baseHue: Math.random() * 360,
-          hueSpeed: Math.random() * 2,
-          hueRange: Math.random() * 720,
-          saturation: 50 + Math.random() * 50,
-          brightness: Math.random() * 100,
-          harmonicSensitivity: Math.random() * 5,
-          harmonicDepth: Math.random() * 360
-        }));
-        break;
-      case 'reactivity':
-        setParams(prev => ({
-          ...prev,
-          sensitivity: Math.random() * 5,
-          freqRange: 0.1 + Math.random() * 0.9,
-          trail: Math.random()
-        }));
-        break;
-      case 'spiralResonance':
-        const resModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
-        const randomResModes = resModes.filter(() => Math.random() > 0.7);
-        setParams(prev => ({
-          ...prev,
-          spiralResonanceModes: randomResModes.length > 0 ? randomResModes : [resModes[Math.floor(Math.random() * resModes.length)]]
-        }));
-        break;
-      case 'sacredGeometry':
-        const sgModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
-        const randomSgModes = sgModes.filter(() => Math.random() > 0.7);
-        setParams(prev => ({
-          ...prev,
-          sacredGeometryModes: randomSgModes.length > 0 ? randomSgModes : [sgModes[Math.floor(Math.random() * sgModes.length)]],
-          sgGlobalOpacity: Math.random() * 3,
-          sgGlobalFlowSpeed: (Math.random() - 0.5) * 6,
-          sgGlobalAudioReactivity: Math.random() * 5,
-          sgGlobalViscosity: Math.random() * 3,
-          sgDrawMode: 'both'
-        }));
-        break;
-      case 'vrAr':
-        setParams(prev => ({
-          ...prev,
-          vrDepth: 1 + Math.random() * 99,
-          vrRadius: Math.random() * 20,
-          vrThickness: 0.1 + Math.random() * 9.9,
-          vrDistance: (Math.random() - 0.5) * 40,
-          arIntensity: Math.random(),
-          arPortalScale: 0.1 + Math.random() * 19.9,
-          arPortalPerspectiveIntensity: Math.random() * 5,
-          arPortalVanishingRadius: Math.random() * 10,
-          arPortalFade: Math.random() * 5,
-          arPortalBending: Math.random()
-        }));
-        break;
-    }
+          ];
+          if (!isLocked('bgSpeed')) next.bgSpeed = Math.random() * 2;
+          if (!isLocked('bgVignetteIntensity')) next.bgVignetteIntensity = Math.random();
+          break;
+        case 'baseGeometry':
+          if (!isLocked('k')) next.k = 0.9 + Math.random() * 0.2;
+          if (!isLocked('iter')) next.iter = Math.floor(500 + Math.random() * 1500);
+          if (!isLocked('zoom')) next.zoom = 0.0001 + Math.random() * 0.0099;
+          if (!isLocked('distanceZoom')) next.distanceZoom = 0.1 + Math.random() * 4.9;
+          if (!isLocked('spiralThickness')) next.spiralThickness = 0.1 + Math.random() * 4.9;
+          break;
+        case 'transformation':
+          if (!isLocked('psi')) next.psi = Math.random() * Math.PI * 2;
+          if (!isLocked('z0_r')) next.z0_r = (Math.random() - 0.5) * 2;
+          if (!isLocked('z0_i')) next.z0_i = (Math.random() - 0.5) * 2;
+          break;
+        case 'color':
+          if (!isLocked('baseHue')) next.baseHue = Math.random() * 360;
+          if (!isLocked('hueSpeed')) next.hueSpeed = Math.random() * 2;
+          if (!isLocked('hueRange')) next.hueRange = Math.random() * 720;
+          if (!isLocked('saturation')) next.saturation = 50 + Math.random() * 50;
+          if (!isLocked('brightness')) next.brightness = Math.random() * 100;
+          if (!isLocked('harmonicSensitivity')) next.harmonicSensitivity = Math.random() * 5;
+          if (!isLocked('harmonicDepth')) next.harmonicDepth = Math.random() * 360;
+          break;
+        case 'reactivity':
+          if (!isLocked('sensitivity')) next.sensitivity = Math.random() * 5;
+          if (!isLocked('freqRange')) next.freqRange = 0.1 + Math.random() * 0.9;
+          if (!isLocked('trail')) next.trail = Math.random();
+          break;
+        case 'spiralResonance':
+          const resModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
+          const currentResModes = prev.spiralResonanceModes || [];
+          const newResModes: SacredGeometryMode[] = [];
+          resModes.forEach(mode => {
+            const isModeLocked = prev.lockedParams?.includes(`spiralMode_${mode}`);
+            if (isModeLocked) {
+              if (currentResModes.includes(mode)) newResModes.push(mode);
+            } else {
+              if (Math.random() > 0.7) newResModes.push(mode);
+            }
+          });
+          if (newResModes.length === 0 && !prev.lockedParams?.some(k => k.startsWith('spiralMode_'))) {
+             newResModes.push(resModes[Math.floor(Math.random() * resModes.length)]);
+          }
+          next.spiralResonanceModes = newResModes;
+          break;
+        case 'sacredGeometry':
+          const sgModes: SacredGeometryMode[] = ['goldenSpiral', 'flowerOfLife', 'quantumWave', 'torus', 'metatron', 'merkaba', 'platonicSolids', 'sriYantra', 'cymatics', 'vectorEquilibrium', 'treeOfLife', 'yinYang', 'mandala1', 'mandala2', 'mandala3', 'holographicFractal', 'chakras', 'om', 'lotus', 'dharmaChakra'];
+          const currentSgModes = prev.sacredGeometryModes || [];
+          const newSgModes: SacredGeometryMode[] = [];
+          sgModes.forEach(mode => {
+            const isModeLocked = prev.lockedParams?.includes(`sacredMode_${mode}`);
+            if (isModeLocked) {
+              if (currentSgModes.includes(mode)) newSgModes.push(mode);
+            } else {
+              if (Math.random() > 0.7) newSgModes.push(mode);
+            }
+          });
+          if (newSgModes.length === 0 && !prev.lockedParams?.some(k => k.startsWith('sacredMode_'))) {
+             newSgModes.push(sgModes[Math.floor(Math.random() * sgModes.length)]);
+          }
+          next.sacredGeometryModes = newSgModes;
+          if (!isLocked('sgGlobalOpacity')) next.sgGlobalOpacity = Math.random() * 3;
+          if (!isLocked('sgGlobalFlowSpeed')) next.sgGlobalFlowSpeed = (Math.random() - 0.5) * 6;
+          if (!isLocked('sgGlobalAudioReactivity')) next.sgGlobalAudioReactivity = Math.random() * 5;
+          if (!isLocked('sgGlobalViscosity')) next.sgGlobalViscosity = Math.random() * 3;
+          if (!isLocked('sgDrawMode')) next.sgDrawMode = 'both';
+          break;
+        case 'vrAr':
+          if (!isLocked('vrDepth')) next.vrDepth = 1 + Math.random() * 99;
+          if (!isLocked('vrRadius')) next.vrRadius = Math.random() * 20;
+          if (!isLocked('vrThickness')) next.vrThickness = 0.1 + Math.random() * 9.9;
+          if (!isLocked('vrDistance')) next.vrDistance = (Math.random() - 0.5) * 40;
+          if (!isLocked('arIntensity')) next.arIntensity = Math.random();
+          if (!isLocked('arPortalScale')) next.arPortalScale = 0.1 + Math.random() * 19.9;
+          if (!isLocked('arPortalPerspectiveIntensity')) next.arPortalPerspectiveIntensity = Math.random() * 5;
+          if (!isLocked('arPortalVanishingRadius')) next.arPortalVanishingRadius = Math.random() * 10;
+          if (!isLocked('arPortalFade')) next.arPortalFade = Math.random() * 5;
+          if (!isLocked('arPortalBending')) next.arPortalBending = Math.random();
+          break;
+      }
+      return next;
+    });
   };
 
   const centerSpiral = () => setParams(prev => ({ ...prev, z0_r: 0, z0_i: 0 }));
@@ -665,35 +1278,62 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
     max: number, 
     step: number,
     icon?: React.ReactNode,
-    disabled: boolean = false
-  ) => (
-    <div className={`mb-3 transition-all duration-500 ${disabled ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-      <div className="flex justify-between items-center mb-1.5 gap-2">
-        <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 flex items-center gap-1 sm:gap-2 font-semibold truncate flex-1">
-          {icon && <span className="text-cyan-300 drop-shadow-[0_0_5px_rgba(0,242,254,0.8)] shrink-0">{icon}</span>}
-          <span className="truncate">{label}</span>
-        </label>
+    isAutoControlled: boolean = false
+  ) => {
+    const isLocked = params.lockedParams?.includes(key);
+    const isAutoActive = isAutoControlled && params.autoPilot && !isLocked;
+
+    const handleManualChange = (val: number) => {
+      if (isAutoControlled && params.autoPilot && !isLocked) {
+        setParams(p => ({ ...p, [key]: val, lockedParams: [...(p.lockedParams || []), key] }));
+      } else {
+        handleChange(key, val);
+      }
+    };
+
+    const toggleLock = () => {
+      setParams(p => {
+        const newLocked = p.lockedParams?.includes(key) 
+          ? p.lockedParams.filter(k => k !== key)
+          : [...(p.lockedParams || []), key];
+        return { ...p, lockedParams: newLocked };
+      });
+    };
+
+    return (
+      <div className={`mb-3 transition-all duration-500 ${isLocked ? 'bg-indigo-900/40 border border-indigo-500/50 p-2 rounded-lg' : ''} ${isAutoActive ? 'opacity-70' : 'opacity-100'}`}>
+        <div className="flex justify-between items-center mb-1.5 gap-2">
+          <label className="text-[10px] sm:text-xs uppercase tracking-wider text-gray-300 flex items-center gap-1 sm:gap-2 font-semibold truncate flex-1">
+            {icon && <span className="text-cyan-300 drop-shadow-[0_0_5px_rgba(0,242,254,0.8)] shrink-0">{icon}</span>}
+            <span className="truncate">{label}</span>
+          </label>
+          <div className="flex items-center gap-2">
+            {isAutoControlled && params.autoPilot && (
+              <button onClick={toggleLock} className="text-gray-400 hover:text-white transition-colors" title={isLocked ? "Desbloquear autoregeneración" : "Bloquear autoregeneración"}>
+                {isLocked ? <Lock size={14} className="text-indigo-400" /> : <Unlock size={14} className="opacity-30" />}
+              </button>
+            )}
+            <input
+              type="number"
+              step="any"
+              value={typeof params[key] === 'number' ? Number(params[key]).toFixed(3) : params[key] as unknown as number}
+              onChange={(e) => handleManualChange(parseFloat(e.target.value))}
+              className="font-mono text-xs text-cyan-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-cyan-400 outline-none text-right w-16 sm:w-20 hover:border-white/30 transition-all shadow-inner shrink-0"
+            />
+          </div>
+        </div>
         <input
-          type="number"
-          step="any"
-          value={typeof params[key] === 'number' ? Number(params[key]).toFixed(3) : params[key] as unknown as number}
-          onChange={(e) => handleChange(key, parseFloat(e.target.value))}
-          disabled={disabled}
-          className="font-mono text-xs text-cyan-200 bg-black/30 border border-white/10 rounded-lg px-2 py-1 focus:border-cyan-400 outline-none text-right w-16 sm:w-20 hover:border-white/30 transition-all shadow-inner shrink-0"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={params[key] as number}
+          onChange={(e) => handleManualChange(parseFloat(e.target.value))}
+          className={`liquid-slider ${isLocked ? 'locked' : ''}`}
         />
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={params[key] as number}
-        onChange={(e) => handleChange(key, parseFloat(e.target.value))}
-        disabled={disabled}
-        className="liquid-slider"
-      />
-    </div>
-  );
+    );
+  };
 
   const renderSgControl = (
     label: string, 
@@ -1169,77 +1809,85 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
         <div className="p-2 md:p-4 overflow-y-auto flex-1 min-h-0 liquid-scroll">
           <div className="columns-1 lg:columns-2 gap-2 md:gap-4">
             
-            {/* Modos de ajustes aleatorios Section */}
+            {/* Ajustes Automáticos Section */}
             <div className="liquid-section break-inside-avoid">
                <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-bold neon-text flex items-center gap-2">
                   <Shuffle className="w-5 h-5 icon-neon" /> 
-                  Modos de ajustes aleatorios
+                  Ajustes Automáticos
                 </h3>
                </div>
                
-               <div className="space-y-6">
-                 <div className="grid grid-cols-3 gap-2">
+               <div className="space-y-4">
+                 <div className="flex items-center gap-2 mb-4">
+                   <div className="flex-1 bg-black/40 border border-white/10 rounded-xl p-1 flex items-center">
+                     <BrainCircuit className="w-4 h-4 text-purple-400 ml-2 mr-1" />
+                     <select
+                       value={params.autoRandomMode}
+                       onChange={(e) => handleAutoRandomModeChange(e.target.value as any)}
+                       className="bg-transparent text-cyan-300 text-xs font-bold w-full p-2 outline-none appearance-none cursor-pointer"
+                     >
+                       <option value="none">Apagado</option>
+                       <option value="random">Aleatorio Total</option>
+                       <option value="smart">Inteligente Automático</option>
+                       <option value="dj">Modo DJ</option>
+                       <option value="sacred">Resonancias Sagradas</option>
+                       <option value="rhythmic">Ritmos Musicales</option>
+                       <option value="rainbow">Sinfonía Arcoíris</option>
+                       <option value="astral">Astromorphociberpsicodélico</option>
+                     </select>
+                   </div>
                    <button
-                     onClick={() => generateRandomParams('random', false)}
-                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-cyan-300 hover:text-cyan-200"
+                     onClick={() => {
+                       if (params.autoRandomMode !== 'none') {
+                         generateRandomParams(params.autoRandomMode as any, false);
+                       }
+                     }}
+                     disabled={params.autoRandomMode === 'none'}
+                     className={`p-3 rounded-xl border transition-all flex items-center justify-center ${
+                       params.autoRandomMode !== 'none' 
+                         ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
+                         : 'bg-gray-800/50 border-gray-700 text-gray-500 cursor-not-allowed'
+                     }`}
+                     title="Regenerar Valores"
                    >
-                     <Shuffle size={20} />
-                     <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Total</span>
-                   </button>
-                   <button
-                     onClick={() => generateRandomParams('smart', false)}
-                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-emerald-300 hover:text-emerald-200"
-                   >
-                     <BrainCircuit size={20} />
-                     <span className="text-xs font-semibold text-center leading-tight">Aleatorio<br/>Inteligente</span>
-                   </button>
-                   <button
-                     onClick={() => generateRandomParams('dj', false)}
-                     className="liquid-bubble py-3 flex flex-col items-center gap-1 text-purple-400 hover:text-purple-300"
-                   >
-                     <Music size={20} />
-                     <span className="text-xs font-semibold text-center leading-tight">Modo<br/>DJ</span>
+                     <RotateCw size={18} className={params.autoRandomMode !== 'none' ? 'animate-spin-slow' : ''} />
                    </button>
                  </div>
 
-                 <div className="bg-black/30 p-4 rounded-2xl border border-white/10">
-                   <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                     <Activity size={16} className="text-purple-400" />
-                     Auto-Regeneración
-                   </h3>
+                 <div className="bg-black/30 p-3 rounded-xl border border-white/10">
+                   <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">
+                     <Activity size={14} className="text-purple-400" />
+                     Ajustes de Auto-Regeneración
+                   </h4>
                    
-                   <div className="space-y-4">
-                     <div className="flex items-center justify-between">
-                       <label className="text-xs text-gray-300">Modo Automático</label>
-                       <select
-                         value={autoRandomMode}
-                         onChange={(e) => handleAutoRandomModeChange(e.target.value as any)}
-                         className="bg-black/50 border border-white/10 text-cyan-300 text-xs rounded-lg p-2 outline-none"
-                       >
-                         <option value="none">Apagado</option>
-                         <option value="random">Aleatorio Total</option>
-                         <option value="smart">Aleatorio Inteligente</option>
-                         <option value="dj">Modo DJ</option>
-                       </select>
-                     </div>
-
-                     {autoRandomMode !== 'none' && (
+                   <div className="space-y-3">
+                     {params.autoRandomMode !== 'none' ? (
                        <>
                          <div className="flex items-center justify-between">
-                           <label className="text-xs text-gray-300">Detección de Emoción/Estilo</label>
+                           <label className="text-[10px] text-gray-300">Detección de Emoción/Estilo</label>
                            <input
                              type="checkbox"
                              checked={autoRandomOnEmotionChange}
                              onChange={(e) => setAutoRandomOnEmotionChange(e.target.checked)}
-                             className="w-4 h-4 accent-cyan-500"
+                             className="w-3 h-3 accent-cyan-500"
+                           />
+                         </div>
+                         
+                         <div className="flex items-center justify-between mt-2">
+                           <label className="text-[10px] text-gray-300">Detección de Ritmos</label>
+                           <input
+                             type="checkbox"
+                             checked={params.autoRandomOnBeat}
+                             onChange={(e) => handleChange('autoRandomOnBeat', e.target.checked)}
+                             className="w-3 h-3 accent-cyan-500"
                            />
                          </div>
 
-                         {autoRandomOnEmotionChange && (
-                           <div className="space-y-4 mt-4">
+                         {(autoRandomOnEmotionChange || params.autoRandomOnBeat) && (
+                           <div className="space-y-3 mt-2">
                              <div className="flex flex-col items-center">
-                               <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                               <label className="text-[10px] text-gray-300 flex justify-between w-full mb-1">
                                  <span>Sensibilidad a Emoción</span>
                                  <span className="text-cyan-400">{autoEmotionSensitivity}%</span>
                                </label>
@@ -1250,12 +1898,28 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                                  step="1"
                                  value={autoEmotionSensitivity}
                                  onChange={(e) => setAutoEmotionSensitivity(Number(e.target.value))}
-                                 className="w-full accent-cyan-500"
+                                 className="w-full h-1 accent-cyan-500"
                                />
                              </div>
-                             
+
                              <div className="flex flex-col items-center">
-                               <label className="text-xs text-gray-300 flex justify-between w-full mb-2">
+                               <label className="text-[10px] text-gray-300 flex justify-between w-full mb-1">
+                                 <span>Sensibilidad a Ritmos</span>
+                                 <span className="text-cyan-400">{autoBeatSensitivity}%</span>
+                               </label>
+                               <input
+                                 type="range"
+                                 min="0"
+                                 max="100"
+                                 step="1"
+                                 value={autoBeatSensitivity}
+                                 onChange={(e) => setAutoBeatSensitivity(Number(e.target.value))}
+                                 className="w-full h-1 accent-cyan-500"
+                               />
+                             </div>
+
+                             <div className="flex flex-col items-center">
+                               <label className="text-[10px] text-gray-300 flex justify-between w-full mb-1">
                                  <span>Fluidez de Estilo</span>
                                  <span className="text-cyan-400">{autoStyleFluidity}%</span>
                                </label>
@@ -1266,30 +1930,153 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                                  step="1"
                                  value={autoStyleFluidity}
                                  onChange={(e) => setAutoStyleFluidity(Number(e.target.value))}
-                                 className="w-full accent-cyan-500"
+                                 className="w-full h-1 accent-cyan-500"
+                               />
+                             </div>
+                             
+                             <div className="flex flex-col items-center">
+                               <label className="text-[10px] text-gray-300 flex justify-between w-full mb-1">
+                                 <span>Velocidad de Reactividad</span>
+                                 <span className="text-cyan-400">{autoRandomReactivitySpeed}%</span>
+                               </label>
+                               <input
+                                 type="range"
+                                 min="0"
+                                 max="100"
+                                 step="1"
+                                 value={autoRandomReactivitySpeed}
+                                 onChange={(e) => setAutoRandomReactivitySpeed(Number(e.target.value))}
+                                 className="w-full h-1 accent-cyan-500"
                                />
                              </div>
                            </div>
                          )}
 
-                         {!autoRandomOnEmotionChange && (
+                         {(!autoRandomOnEmotionChange && !params.autoRandomOnBeat) && (
                            <div>
-                             <label className="text-xs text-gray-300 flex justify-between mb-2">
-                               <span>Intervalo de Tiempo</span>
+                             <label className="text-[10px] text-gray-300 flex justify-between mb-1">
+                               <span>Intervalo (Velocidad de Reactividad)</span>
                                <span className="text-cyan-400">{autoRandomInterval}s</span>
                              </label>
                              <input
                                type="range"
-                               min="5"
+                               min="1"
                                max="60"
                                step="1"
                                value={autoRandomInterval}
                                onChange={(e) => setAutoRandomInterval(Number(e.target.value))}
-                               className="w-full accent-cyan-500"
+                               className="w-full h-1 accent-cyan-500"
                              />
                            </div>
                          )}
+
+                         {/* Advanced Auto-Regeneration Settings */}
+                         <div className="mt-4 pt-4 border-t border-purple-500/30">
+                           <h4 className="text-xs font-bold text-purple-300 mb-3 flex items-center gap-2">
+                             <BrainCircuit className="w-3 h-3" /> Autoregeneración Avanzada
+                           </h4>
+                           
+                           <div className="space-y-3">
+                             <div className="flex items-center justify-between bg-black/30 p-2 rounded-lg border border-white/5">
+                               <label className="text-[10px] text-gray-300">Desvanecimiento Fuera de Pantalla</label>
+                               <button 
+                                 onClick={() => handleChange('autoOffscreenFade', !params.autoOffscreenFade)}
+                                 className={`w-8 h-4 rounded-full transition-colors relative ${params.autoOffscreenFade ? 'bg-purple-500' : 'bg-gray-700'}`}
+                               >
+                                 <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${params.autoOffscreenFade ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                               </button>
+                             </div>
+
+                             <div className="bg-black/30 p-2 rounded-lg border border-white/5 space-y-1.5">
+                               <label className="text-[10px] text-gray-300 font-semibold">Relación de Parámetros</label>
+                               <div className="flex gap-1">
+                                 <button 
+                                   onClick={() => handleChange('autoRelationshipMode', 'empathetic')}
+                                   className={`flex-1 py-1 text-[10px] rounded transition-colors ${params.autoRelationshipMode === 'empathetic' ? 'bg-purple-500/40 text-purple-200 border border-purple-500/50' : 'bg-black/50 text-gray-400 border border-white/10'}`}
+                                 >
+                                   Empática
+                                 </button>
+                                 <button 
+                                   onClick={() => handleChange('autoRelationshipMode', 'rhythmic')}
+                                   className={`flex-1 py-1 text-[10px] rounded transition-colors ${params.autoRelationshipMode === 'rhythmic' ? 'bg-purple-500/40 text-purple-200 border border-purple-500/50' : 'bg-black/50 text-gray-400 border border-white/10'}`}
+                                 >
+                                   Rítmica
+                                 </button>
+                                 <button 
+                                   onClick={() => handleChange('autoRelationshipMode', 'technical')}
+                                   className={`flex-1 py-1 text-[10px] rounded transition-colors ${params.autoRelationshipMode === 'technical' ? 'bg-purple-500/40 text-purple-200 border border-purple-500/50' : 'bg-black/50 text-gray-400 border border-white/10'}`}
+                                 >
+                                   Técnica
+                                 </button>
+                               </div>
+                             </div>
+
+                             <div className="bg-black/30 p-2 rounded-lg border border-white/5 space-y-1.5">
+                               <label className="text-[10px] text-gray-300 font-semibold">Retardo de Tiempo</label>
+                               <select 
+                                 value={params.autoTimeDelayMode}
+                                 onChange={(e) => handleChange('autoTimeDelayMode', e.target.value as any)}
+                                 className="w-full bg-black/50 border border-white/10 rounded text-[10px] text-cyan-200 p-1 outline-none focus:border-purple-500"
+                               >
+                                 <option value="instant">Instantáneo</option>
+                                 <option value="smart">Automático Inteligente</option>
+                                 <option value="custom">Personalizable</option>
+                               </select>
+                               {params.autoTimeDelayMode === 'custom' && (
+                                 <div className="pt-1">
+                                   {renderControl("Segundos", "autoTimeDelay", 0, 10, 0.1)}
+                                 </div>
+                               )}
+                             </div>
+
+                             <div className="bg-black/30 p-2 rounded-lg border border-white/5 space-y-1.5">
+                               <label className="text-[10px] text-gray-300 font-semibold">Regeneración de Parámetros</label>
+                               <select 
+                                 value={params.autoParamRegenMode}
+                                 onChange={(e) => handleChange('autoParamRegenMode', e.target.value as any)}
+                                 className="w-full bg-black/50 border border-white/10 rounded text-[10px] text-cyan-200 p-1 outline-none focus:border-purple-500"
+                               >
+                                 <option value="instant">Instantáneo</option>
+                                 <option value="custom">Retardo Personalizable</option>
+                               </select>
+                               {params.autoParamRegenMode === 'custom' && (
+                                 <div className="pt-1 space-y-1">
+                                   {renderControl("Retardo (s)", "autoParamRegenDelay", 0, 10, 0.1)}
+                                   {renderControl("Búfer Resonancia (%)", "autoParamRegenBuffer", 0, 100, 1)}
+                                 </div>
+                               )}
+                             </div>
+
+                             <div className="bg-black/30 p-2 rounded-lg border border-white/5 space-y-1.5">
+                               <label className="text-[10px] text-gray-300 font-semibold">Selección Máxima</label>
+                               <select 
+                                 value={params.autoMaxSelectionMode}
+                                 onChange={(e) => handleChange('autoMaxSelectionMode', e.target.value as any)}
+                                 className="w-full bg-black/50 border border-white/10 rounded text-[10px] text-cyan-200 p-1 outline-none focus:border-purple-500"
+                               >
+                                 <option value="smart">Automático Inteligente</option>
+                                 <option value="manual">Manual</option>
+                               </select>
+                               {params.autoMaxSelectionMode === 'manual' && (
+                                 <div className="pt-1">
+                                   {renderControl("Límite", "autoMaxSelection", 1, 10, 1)}
+                                 </div>
+                               )}
+                             </div>
+
+                             <div className="bg-black/30 p-2 rounded-lg border border-white/5 space-y-1.5">
+                               <label className="text-[10px] text-gray-300 font-semibold">Nivelador de Relación de Parámetros</label>
+                               <div className="pt-1">
+                                 {renderControl("Nivelador (%)", "autoParamRatioLeveler", 0, 100, 1)}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
                        </>
+                     ) : (
+                       <div className="text-center py-4 text-gray-500 text-xs">
+                         Selecciona un modo para ver los ajustes.
+                       </div>
                      )}
                    </div>
                  </div>
@@ -1301,7 +2088,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                <div className="flex justify-between items-center mb-4">
                  <h3 className="text-lg font-bold neon-text flex items-center gap-2">
                   <BrainCircuit className="w-5 h-5 icon-neon-indigo" /> 
-                  Piloto Automático
+                  Espiral Automático
                 </h3>
                 <div 
                    onClick={() => handleChange('autoPilot', !params.autoPilot)}
@@ -1396,34 +2183,56 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 <h3 className="text-lg font-bold neon-text-emerald flex items-center gap-2">
                   <Waves className="w-5 h-5 icon-neon-emerald" /> Perturbación de Espiral
                 </h3>
-                <button onClick={() => randomizeSection('spiralResonance')} className="text-emerald-400 hover:text-emerald-300 transition-colors" title="Armonía Aleatoria">
-                  <Shuffle size={18} className="icon-neon-emerald" />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => randomizeSection('spiralResonance')} className="text-emerald-400 hover:text-emerald-300 transition-colors" title="Armonía Aleatoria">
+                    <Shuffle size={18} className="icon-neon-emerald" />
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner transition-all duration-500`}>
                 {SACRED_GEOMETRY_OPTIONS.map(mode => {
                   const isActive = params.spiralResonanceModes?.includes(mode.id as any);
+                  const isLocked = params.lockedParams?.includes(`spiralMode_${mode.id}`);
                   return (
-                    <button
-                      key={mode.id}
-                      onClick={() => {
-                        const currentModes = params.spiralResonanceModes || [];
-                        let newModes;
-                        if (isActive) {
-                          newModes = currentModes.filter(m => m !== mode.id);
-                        } else {
-                          newModes = [...currentModes, mode.id];
-                        }
-                        handleChange('spiralResonanceModes', newModes);
-                      }}
-                      className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
-                        isActive 
-                          ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
+                    <div key={mode.id} className="relative flex group">
+                      <button
+                        onClick={() => {
+                          const currentModes = params.spiralResonanceModes || [];
+                          let newModes;
+                          if (isActive) {
+                            newModes = currentModes.filter(m => m !== mode.id);
+                          } else {
+                            newModes = [...currentModes, mode.id];
+                          }
+                          handleChange('spiralResonanceModes', newModes);
+                        }}
+                        className={`flex-1 py-2.5 px-2 text-[10px] sm:text-xs uppercase font-bold rounded-xl transition-all ${
+                          isActive 
+                            ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                            : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setParams(p => {
+                            const lockKey = `spiralMode_${mode.id}`;
+                            const newLocked = p.lockedParams?.includes(lockKey)
+                              ? p.lockedParams.filter(k => k !== lockKey)
+                              : [...(p.lockedParams || []), lockKey];
+                            return { ...p, lockedParams: newLocked };
+                          });
+                        }}
+                        className={`absolute top-1 right-1 p-1 rounded-full transition-all ${
+                          isLocked ? 'bg-amber-500/20 text-amber-400' : 'opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 hover:bg-white/10'
+                        }`}
+                        title={isLocked ? "Desbloquear" : "Bloquear"}
+                      >
+                        {isLocked ? <Lock size={10} /> : <Unlock size={10} />}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1451,34 +2260,56 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
               {params.sacredGeometryEnabled && (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-700">
                   <div className="mb-4">
-                    <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 mb-3 font-semibold">
-                      Tipos de Geometría
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner">
+                    <div className="flex justify-between items-center mb-3">
+                      <label className="text-xs uppercase tracking-wider text-gray-300 flex items-center gap-2 font-semibold">
+                        Tipos de Geometría
+                      </label>
+                    </div>
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 bg-black/40 p-1.5 rounded-2xl border border-emerald-500/20 shadow-inner transition-all duration-500`}>
                       {SACRED_GEOMETRY_OPTIONS.map(mode => {
                         const isActive = params.sacredGeometryModes?.includes(mode.id as any);
+                        const isLocked = params.lockedParams?.includes(`sacredMode_${mode.id}`);
                         return (
-                          <button
-                            key={mode.id}
-                            onClick={() => {
-                              const currentModes = params.sacredGeometryModes || [];
-                              let newModes;
-                              if (isActive) {
-                                newModes = currentModes.filter(m => m !== mode.id);
-                                if (newModes.length === 0) newModes = [mode.id];
-                              } else {
-                                newModes = [...currentModes, mode.id];
-                              }
-                              handleChange('sacredGeometryModes', newModes);
-                            }}
-                            className={`py-2.5 px-2 text-xs uppercase font-bold rounded-xl transition-all ${
-                              isActive 
-                                ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                            }`}
-                          >
-                            {mode.label}
-                          </button>
+                          <div key={mode.id} className="relative flex group">
+                            <button
+                              onClick={() => {
+                                const currentModes = params.sacredGeometryModes || [];
+                                let newModes;
+                                if (isActive) {
+                                  newModes = currentModes.filter(m => m !== mode.id);
+                                  if (newModes.length === 0) newModes = [mode.id];
+                                } else {
+                                  newModes = [...currentModes, mode.id];
+                                }
+                                handleChange('sacredGeometryModes', newModes);
+                              }}
+                              className={`flex-1 py-2.5 px-2 text-[10px] sm:text-xs uppercase font-bold rounded-xl transition-all ${
+                                isActive 
+                                  ? 'liquid-bubble text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+                              }`}
+                            >
+                              {mode.label}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setParams(p => {
+                                  const lockKey = `sacredMode_${mode.id}`;
+                                  const newLocked = p.lockedParams?.includes(lockKey)
+                                    ? p.lockedParams.filter(k => k !== lockKey)
+                                    : [...(p.lockedParams || []), lockKey];
+                                  return { ...p, lockedParams: newLocked };
+                                });
+                              }}
+                              className={`absolute top-1 right-1 p-1 rounded-full transition-all ${
+                                isLocked ? 'bg-amber-500/20 text-amber-400' : 'opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-300 hover:bg-white/10'
+                              }`}
+                              title={isLocked ? "Desbloquear" : "Bloquear"}
+                            >
+                              {isLocked ? <Lock size={10} /> : <Unlock size={10} />}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1909,7 +2740,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ params, setParams, audioAct
                 </div>
               ) : (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-700">
-                  {renderControl("Tono Base", "baseHue", 0, 360, 1)}
+                  {renderControl("Tono Base", "baseHue", 0, 360, 1, undefined, params.autoPilot)}
                   {renderControl("Velocidad Ciclo", "hueSpeed", 0, 5, 0.1)}
                 </div>
               )}

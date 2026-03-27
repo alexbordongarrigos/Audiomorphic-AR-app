@@ -66,9 +66,9 @@ export const useAudioAnalyzer = () => {
     setIsActive(false);
   };
 
-  const getAudioMetrics = useCallback((sensitivity: number, freqRange: number): { volume: number, frequency: number } => {
+  const getAudioMetrics = useCallback((sensitivity: number, freqRange: number): { volume: number, frequency: number, bass: number, mid: number, treble: number } => {
     if (!analyserRef.current || !dataArrayRef.current || !isActive) {
-      return { volume: 0, frequency: 0 };
+      return { volume: 0, frequency: 0, bass: 0, mid: 0, treble: 0 };
     }
 
     analyserRef.current.getByteFrequencyData(dataArrayRef.current);
@@ -79,12 +79,28 @@ export const useAudioAnalyzer = () => {
     let totalMagnitude = 0;
     let weightedFrequencySum = 0;
     
+    let bassSum = 0, midSum = 0, trebleSum = 0;
+    let bassCount = 0, midCount = 0, trebleCount = 0;
+    
     for (let i = 0; i < rangeLimit; i++) {
       const val = dataArrayRef.current[i];
       // Noise gate
       if (val > 25) { 
         totalMagnitude += val;
         weightedFrequencySum += i * val;
+      }
+      
+      // Calculate frequency bands (approximate based on 1024 bins for ~22kHz)
+      // Bin size is ~21.5 Hz
+      if (i > 0 && i <= 12) { // 20Hz - 250Hz
+        bassSum += val;
+        bassCount++;
+      } else if (i > 12 && i <= 93) { // 250Hz - 2000Hz
+        midSum += val;
+        midCount++;
+      } else if (i > 93 && i <= 930) { // 2000Hz - 20000Hz
+        trebleSum += val;
+        trebleCount++;
       }
     }
 
@@ -96,8 +112,12 @@ export const useAudioAnalyzer = () => {
       const centroidBin = weightedFrequencySum / totalMagnitude;
       frequency = centroidBin / rangeLimit;
     }
+    
+    const bass = bassCount > 0 ? Math.min((bassSum / bassCount / 255) * sensitivity * 1.5, 1.0) : 0;
+    const mid = midCount > 0 ? Math.min((midSum / midCount / 255) * sensitivity * 1.5, 1.0) : 0;
+    const treble = trebleCount > 0 ? Math.min((trebleSum / trebleCount / 255) * sensitivity * 1.5, 1.0) : 0;
 
-    return { volume, frequency };
+    return { volume, frequency, bass, mid, treble };
   }, [isActive]);
 
   return {

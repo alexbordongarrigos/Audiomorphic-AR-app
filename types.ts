@@ -78,6 +78,21 @@ export interface VisualizerParams {
   autoEmotionSensitivity: number; // Sensibilidad emocional
   autoStyleFluidity: number; // Fluidez entre estilos inteligentes
   
+  // Auto-Regeneration Advanced Params
+  autoOffscreenFade: boolean;
+  autoTimeDelayMode: 'instant' | 'custom' | 'smart';
+  autoTimeDelay: number; // 0 to 10 seconds
+  autoParamRegenMode: 'instant' | 'custom';
+  autoParamRegenDelay: number; // 0 to 10 seconds
+  autoParamRegenBuffer: number; // 0 to 100 (auto/reference buffer)
+  autoMaxSelectionMode: 'manual' | 'smart';
+  autoMaxSelection: number; // 1 to 10
+  autoRelationshipMode: 'empathetic' | 'technical' | 'rhythmic';
+  autoParamRatioLeveler: number; // 0 to 100
+  autoRandomOnBeat: boolean;
+  autoRandomMode: 'none' | 'subtle' | 'chaotic' | 'harmonic' | 'sacred' | 'rhythmic' | 'rainbow' | 'astral' | 'random' | 'smart' | 'dj';
+  lockedParams: string[]; // Keys of manually locked parameters
+  
   // Sacred Geometry Params (Genesis Mode)
   spiralResonanceModes: SacredGeometryMode[]; // For the spiral (Genesis only)
   sacredGeometryEnabled: boolean; // Enable SG layer anywhere
@@ -178,6 +193,20 @@ export const DEFAULT_PARAMS: VisualizerParams = {
   autoSpeed: 1.0,     // Velocidad Deriva
   autoEmotionSensitivity: 0.5,
   autoStyleFluidity: 0.5,
+
+  autoOffscreenFade: false,
+  autoTimeDelayMode: 'smart',
+  autoTimeDelay: 2.0,
+  autoParamRegenMode: 'custom',
+  autoParamRegenDelay: 1.0,
+  autoParamRegenBuffer: 50,
+  autoMaxSelectionMode: 'smart',
+  autoMaxSelection: 3,
+  autoRelationshipMode: 'empathetic',
+  autoParamRatioLeveler: 50,
+  autoRandomOnBeat: true,
+  autoRandomMode: 'none',
+  lockedParams: [],
 
   spiralResonanceModes: ['flowerOfLife'],
   sacredGeometryEnabled: false,

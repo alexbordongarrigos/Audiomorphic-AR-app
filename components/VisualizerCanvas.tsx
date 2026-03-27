@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { VisualizerParams, DEFAULT_PARAMS, SacredGeometrySettings } from '../types';
+import { VisualizerParams, DEFAULT_PARAMS, SacredGeometrySettings, SacredGeometryMode } from '../types';
 import {
   drawMetatron,
   drawMerkaba,
@@ -217,6 +217,12 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
   const timeRef = useRef<number>(0);
   const currentHueRef = useRef<number>(params.baseHue);
   
+  // Fading modes tracking for autoOffscreenFade
+  const fadingSgModesRef = useRef<{ mode: SacredGeometryMode, opacity: number, scale: number }[]>([]);
+  const prevSgModesRef = useRef<SacredGeometryMode[]>([]);
+  const fadingResonanceModesRef = useRef<{ mode: SacredGeometryMode, opacity: number, scale: number }[]>([]);
+  const prevResonanceModesRef = useRef<SacredGeometryMode[]>([]);
+  
   // Smoothing refs for organic movement
   const smoothedVolRef = useRef<number>(0);
   const smoothedFreqRef = useRef<number>(0);
@@ -416,16 +422,52 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
 
       const spiralPoints: {x: number, y: number, mag: number, angle: number}[] = [];
 
+      // --- OFFSCREEN FADE LOGIC ---
+      const currentSgModes = p.sacredGeometryModes || ['flowerOfLife'];
+      const currentResonanceModes = p.spiralResonanceModes || ['flowerOfLife'];
+      
+      if (p.autoOffscreenFade) {
+        // SG Modes
+        prevSgModesRef.current.forEach(mode => {
+          if (!currentSgModes.includes(mode) && !fadingSgModesRef.current.find(f => f.mode === mode)) {
+            fadingSgModesRef.current.push({ mode, opacity: 1.0, scale: 1.0 });
+          }
+        });
+        fadingSgModesRef.current = fadingSgModesRef.current.filter(f => {
+          f.opacity -= 0.005; // Fade out speed
+          f.scale += 0.02; // Expand speed
+          return f.opacity > 0;
+        });
+        
+        // Resonance Modes
+        prevResonanceModesRef.current.forEach(mode => {
+          if (!currentResonanceModes.includes(mode) && !fadingResonanceModesRef.current.find(f => f.mode === mode)) {
+            fadingResonanceModesRef.current.push({ mode, opacity: 1.0, scale: 1.0 });
+          }
+        });
+        fadingResonanceModesRef.current = fadingResonanceModesRef.current.filter(f => {
+          f.opacity -= 0.005; // Fade out speed
+          f.scale += 0.02; // Expand speed
+          return f.opacity > 0;
+        });
+      } else {
+        fadingSgModesRef.current = [];
+        fadingResonanceModesRef.current = [];
+      }
+      
+      prevSgModesRef.current = currentSgModes;
+      prevResonanceModesRef.current = currentResonanceModes;
+
+      const activeSgModes = currentSgModes.length > 0 ? currentSgModes : ['flowerOfLife'];
+      const allSgModesToDraw = [...activeSgModes.map(m => ({mode: m, opacity: 1.0, scale: 1.0})), ...fadingSgModesRef.current];
+
       // --- NEW LAYERED VISUALIZATION (BACKGROUND) ---
       if (p.sacredGeometryEnabled && (p.sgDrawMode === 'layers' || p.sgDrawMode === 'both')) {
-          const modes = p.sacredGeometryModes || ['flowerOfLife'];
-          const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
-          
-          activeModes.forEach((mode, modeIndex) => {
+          allSgModesToDraw.forEach(({mode, opacity: fadeOpacity, scale: fadeScale}, modeIndex) => {
               const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
               if (!settings) return;
               const numLayers = Math.max(1, Math.floor(settings.complexity));
-              const baseRadius = Math.min(width, height) * 0.1 * settings.scale;
+              const baseRadius = Math.min(width, height) * 0.1 * settings.scale * fadeScale;
               const effectiveFlowSpeed = settings.flowSpeed * 0.5 * (1 - settings.viscosity * 0.8);
               const timeOffset = timeRef.current * effectiveFlowSpeed;
               const effectiveReactivity = settings.audioReactivity * (1 - settings.viscosity * 0.5);
@@ -446,8 +488,11 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   const layerHue = (displayBaseHue + hueOffset) % 360;
                   
                   const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity, bgOpacity: baseBgOpacity } = getGeometryColor(
-                    p, settings, layerHue, sVol, modeIndex, activeModes.length
+                    p, settings, layerHue, sVol, modeIndex, allSgModesToDraw.length
                   );
+                  
+                  const lineOpacity = baseLineOpacity * fadeOpacity;
+                  const bgOpacity = baseBgOpacity * fadeOpacity;
                   
                   // Fade in at center, fade out at edges
                   let alphaMultiplier = Math.sin(layerProgress * Math.PI);
@@ -458,11 +503,11 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   const rotation = timeRef.current * 0.2 * (i % 2 === 0 ? 1 : -1) + layerProgress * Math.PI;
 
                   if (alphaMultiplier > 0.01) {
-                      const modeRotation = rotation + (modeIndex * Math.PI / activeModes.length);
+                      const modeRotation = rotation + (modeIndex * Math.PI / allSgModesToDraw.length);
                       const modeRadius = radius * (1 - (modeIndex * 0.05));
                       
-                      const lineOpacity = baseLineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
-                      const bgOpacity = baseBgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const lineOpacity = baseLineOpacity * alphaMultiplier * fadeOpacity / Math.sqrt(allSgModesToDraw.length);
+                      const bgOpacity = baseBgOpacity * alphaMultiplier * fadeOpacity / Math.sqrt(allSgModesToDraw.length);
                       
                       if (mode === 'flowerOfLife') {
                           drawSeedOfLife(ctx, cx, cy, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
@@ -540,17 +585,18 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
         // --- METAPHYSICAL PERTURBATION ---
         // Modulate the spiral's path organically based on the selected sacred geometry
         const activeSpiralModes = p.spiralResonanceModes || [];
-        if (activeSpiralModes.length > 0) {
+        const allResonanceModesToDraw = [...activeSpiralModes.map(m => ({mode: m, opacity: 1.0, scale: 1.0})), ...fadingResonanceModesRef.current];
+        
+        if (allResonanceModesToDraw.length > 0) {
             const t = timeRef.current * 0.2;
-            const activeModes = activeSpiralModes;
             
             let totalOffsetX = 0;
             let totalOffsetY = 0;
             
-            activeModes.forEach(mode => {
+            allResonanceModesToDraw.forEach(({mode, opacity: fadeOpacity, scale: fadeScale}) => {
                 const settings = p.sgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
                 if (!settings) return;
-                const react = settings.audioReactivity;
+                const react = settings.audioReactivity * fadeOpacity * fadeScale;
                 if (mode === 'goldenSpiral') {
                     const angle = Math.atan2(py - cy, px - cx);
                     const offset = Math.sin(angle * 1.6180339 - t) * 10 * sVol * react;
@@ -649,8 +695,8 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
             });
             
             // Average the offsets to prevent wild swings when multiple modes are active
-            px += totalOffsetX / Math.sqrt(activeModes.length);
-            py += totalOffsetY / Math.sqrt(activeModes.length);
+            px += totalOffsetX / Math.sqrt(allResonanceModesToDraw.length);
+            py += totalOffsetY / Math.sqrt(allResonanceModesToDraw.length);
         }
 
         ctx.lineTo(px, py);
@@ -729,10 +775,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                   };
               };
 
-              const modes = p.sacredGeometryModes || ['flowerOfLife'];
-              const activeModes = modes.length > 0 ? modes : ['flowerOfLife'];
-              
-              activeModes.forEach((mode, modeIndex) => {
+              allSgModesToDraw.forEach(({mode, opacity: fadeOpacity, scale: fadeScale}, modeIndex) => {
                   const settings = currentSgSettings[mode] || DEFAULT_PARAMS.sgSettings[mode];
                   if (!settings) return;
                   const numNodes = Math.max(1, Math.floor(settings.complexity));
@@ -748,7 +791,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                       const pt1 = getSpiralPoint(t1);
                       
                       // Dynamic radius
-                      let radius = Math.pow(pt1.mag, 0.5) * responsiveZoom * 0.05 * settings.scale;
+                      let radius = Math.pow(pt1.mag, 0.5) * responsiveZoom * 0.05 * settings.scale * fadeScale;
                       radius *= (1.0 + sVol * effectiveReactivity);
                       
                       // Color & Opacity
@@ -756,7 +799,7 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                       const nodeHue = (displayBaseHue + hueOffset) % 360;
                       
                       const { hue: finalHue, sat: finalSat, light: finalLight, lineOpacity: baseLineOpacity, bgOpacity: baseBgOpacity } = getGeometryColor(
-                        p, settings, nodeHue, sVol, modeIndex, activeModes.length
+                        p, settings, nodeHue, sVol, modeIndex, allSgModesToDraw.length
                       );
                       
                       let alphaMultiplier = (0.15 + 0.85 * sVol * effectiveReactivity);
@@ -764,11 +807,11 @@ const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({ params, getAudioMet
                       
                       const rotation = pt1.angle + timeRef.current * 0.1;
 
-                      const modeRotation = rotation + (modeIndex * Math.PI / activeModes.length);
+                      const modeRotation = rotation + (modeIndex * Math.PI / allSgModesToDraw.length);
                       const modeRadius = radius * (1 - (modeIndex * 0.05));
                       
-                      const lineOpacity = baseLineOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
-                      const bgOpacity = baseBgOpacity * alphaMultiplier / Math.sqrt(activeModes.length);
+                      const lineOpacity = baseLineOpacity * alphaMultiplier * fadeOpacity / Math.sqrt(allSgModesToDraw.length);
+                      const bgOpacity = baseBgOpacity * alphaMultiplier * fadeOpacity / Math.sqrt(allSgModesToDraw.length);
                       
                       if (mode === 'flowerOfLife') {
                           drawSeedOfLife(ctx, pt1.x, pt1.y, modeRadius, modeRotation, lineOpacity, bgOpacity, finalHue, finalSat, finalLight, sVol * effectiveReactivity, settings.thickness);
